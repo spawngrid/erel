@@ -1,0 +1,22 @@
+{application, erel,
+ [
+  {description, "erel"},
+  {vsn, git},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  sasl,
+                  webmachine,
+                  jsx,
+                  lhttpc
+                 ]},
+  {mod, { erel_app, []}},
+  {env, [
+         {http_port, 9999},
+         {endpoints, [http]},
+         {available_endpoints, [
+                                {http, erel_endpoint_http}
+                               ]}
+        ]}
+ ]}.
