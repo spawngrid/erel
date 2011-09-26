@@ -86,7 +86,7 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({instantiate, Release, Version, Options}, _From, #state{ root = Root, releases = Releases, instantiated = Instantiated, port = Ports } = State) ->
+handle_call({instantiate, Release, Version, Options}, _From, #state{ root = Root, releases = Releases, instantiated = Instantiated, ports = Ports } = State) ->
     case lists:member({Release, Version}, Releases) of
         true ->
             Port = instantiate_release(Root, Release, Version, Options),
