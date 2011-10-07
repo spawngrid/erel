@@ -7,7 +7,8 @@
                   kernel,
                   stdlib,
                   sasl,
-                  esupervisor
+                  esupervisor,
+                  ossp_uuid
                  ]},
   {mod, { erel_app, []}},
   {env, [
