@@ -6,14 +6,12 @@
   {applications, [
                   kernel,
                   stdlib,
-                  sasl
+                  sasl,
+                  esupervisor
                  ]},
   {mod, { erel_app, []}},
   {env, [
-         {http_port, 9999},
-         {endpoints, [http]},
-         {available_endpoints, [
-                                {http, erel_endpoint_http}
-                               ]}
+         {endpoints, []},
+         {available_endpoints, []}
         ]}
  ]}.
