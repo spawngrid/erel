@@ -6,10 +6,7 @@
   {applications, [
                   kernel,
                   stdlib,
-                  sasl,
-                  webmachine,
-                  jsx,
-                  lhttpc
+                  sasl
                  ]},
   {mod, { erel_app, []}},
   {env, [
