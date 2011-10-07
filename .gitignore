@@ -1,3 +1,4 @@
 deps
 ebin
 rel/erel
+erl_crash.dump
