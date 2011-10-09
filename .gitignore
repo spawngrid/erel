@@ -1,5 +1,4 @@
 deps
 ebin
-apps/erel/rel/erel
-apps/erel_master/rel/erel_master
 erl_crash.dump
+rel
