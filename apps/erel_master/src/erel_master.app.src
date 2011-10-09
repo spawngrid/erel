@@ -1,0 +1,12 @@
+{application, erel_master,
+ [
+  {description, "erel host master"},
+  {vsn, git},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { erel_master_app, []}},
+  {env, []}
+ ]}.
