@@ -5,7 +5,7 @@
 %% API
 -export([start_link/0,
          instantiate/4,
-         releases/1, releases/0]).
+         releases/1, releases/0, inject_erel/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -32,6 +32,16 @@ releases(Node) ->
 
 releases() ->
     gen_server:call(?SERVER, releases).
+
+inject_erel(ErelDir, RelDir) ->
+  {ok, [Releases]} = file:consult(filename:join([ErelDir, "releases", "RELEASES"])),
+  {release, "erel", Vsn, _Erts, Deps, permanent} = hd(lists:filter(fun ({release, "erel", _Version, _Erts, _Deps, permanent}) -> true; (_) -> false end, Releases)),
+  ErelRelDir = filename:join([ErelDir, "releases", Vsn]),
+  [ copy_dep(ErelDir, RelDir, Name, Version) || {Name, Version, _Path} <- Deps ],
+  filelib:ensure_dir(filename:join([RelDir, "releases", Vsn]) ++ "/"),
+  [ file:copy(filename:join([ErelRelDir, File]), filename:join([RelDir, "releases", Vsn, File])) || File <- ["erel.boot","erel.rel","erel.script"] ],
+  ok.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -188,4 +198,40 @@ instantiate_release(Root, Release, Version, Options) ->
                                        hide]).
                                                
                                        
-              
+copy_dep(ErelDir, RelDir, Name, Version) when is_atom(Name) ->
+ copy_dep(ErelDir, RelDir, atom_to_list(Name), Version);
+copy_dep(ErelDir, RelDir, Name, Version) ->
+  recursive_copy(filename:join([ErelDir, "lib", string:join([Name, Version], "-")]),
+    filename:join([RelDir, "lib", string:join([Name, Version], "-")])).
+
+%% Recursively copy directories
+-spec recursive_copy(list(), list()) -> ok.                            
+recursive_copy(From, To) ->
+  {ok, Files} = file:list_dir(From),
+  [ok = rec_copy(From, To, X) || X <- Files],
+  ok.
+
+-spec rec_copy(list(), list(), list()) -> ok.                            
+rec_copy(_From, _To, [$. | _T]) -> %% Ignore Hidden
+  ok; 
+rec_copy(From, To, File) ->
+
+  NewFrom = filename:join(From, File),
+  NewTo   = filename:join(To, File),
+
+  case filelib:is_dir(NewFrom) of
+
+    true  ->
+      ok = filelib:ensure_dir(NewTo),
+      recursive_copy(NewFrom, NewTo);
+
+    false ->
+      case filelib:is_file(NewFrom) of                
+        true  ->
+          ok = filelib:ensure_dir(NewTo),
+          {ok, _} = file:copy(NewFrom, NewTo),
+          ok;
+        false ->
+          ok            
+      end
+  end.
