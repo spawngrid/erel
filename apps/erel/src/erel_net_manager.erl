@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, hostname/0, cookie/1]).
+-export([start_link/0, cookie/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -13,7 +13,6 @@
 
 -record(state, {
           name,
-          hostname,
           net_kernel,
           cookies = []
          }).
@@ -25,9 +24,6 @@
 cookie(Node) ->
     gen_server:call(?SERVER, {cookie, Node}).
     
-hostname() ->
-    gen_server:call(?SERVER, hostname).
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -58,23 +54,21 @@ init([]) ->
     
     erlang:process_flag(trap_exit, true),
 
-    {ok, Hostname0} = inet:gethostname(),
-    Hostname = list_to_atom(Hostname0),
+    {Hostname, Domain} = {inet_db:gethostname(),inet_db:res_option(domain)},
 
-    case application:get_env(shortname) of
-        undefined ->
-            Name = binary_to_atom(ossp_uuid:make(v4, text), latin1);
-        {ok, Name} ->
-            ok
+    case node() of
+      'nonode@nohost' ->
+        Name = list_to_atom(binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ Hostname ++ "." ++ Domain),
+        os:cmd(filename:join([Root, "bin", "epmd"]) ++ " -daemon"), %% ensure epmd is running
+        {ok, Pid} = net_kernel:start([Name, longnames]),
+        NetKernel = erlang:monitor(process, Pid);
+      Name ->
+        NetKernel = undefined
     end,
 
-    os:cmd(filename:join([Root, "bin", "epmd"]) ++ " -daemon"), %% ensure epmd is running
-    {ok, Pid} = net_kernel:start([Name, shortnames]),
-    NetKernel = erlang:monitor(process, Pid),
 
     {ok, #state{
        name = Name,
-       hostname = Hostname,
        net_kernel = NetKernel
       }}.
 
@@ -99,10 +93,7 @@ handle_call({cookie, Node}, _From, #state{ cookies = Cookies } = State) ->
             {reply, Cookie, State#state{ cookies = [{Node, Cookie}|Cookies] }};
         Cookie ->
             {reply, Cookie, State}
-    end;
-
-handle_call(hostname, _From, #state{ hostname = Hostname } = State) ->
-    {reply, Hostname, State}.
+    end.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -145,6 +136,8 @@ handle_info(_, State) ->
 %% @spec terminate(Reason, State) -> void()
 %% @end
 %%--------------------------------------------------------------------
+terminate(_Reason, #state{ net_kernel = undefined } = _State) ->
+    ok;
 terminate(_Reason, #state{ net_kernel = NetKernel } = _State) ->
     erlang:demonitor(NetKernel),
     net_kernel:stop(),
