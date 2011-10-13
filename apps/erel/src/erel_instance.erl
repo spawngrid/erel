@@ -14,8 +14,12 @@
          code_change/3]).
 
 -record(state, {
+    root :: string() | undefined,
     name :: string() | undefined,
-    version :: string() | undefined
+    version :: string() | undefined,
+    port :: port() | undefined,
+    cookie :: atom() | undefined,
+    node :: atom() | undefined
   }).
 
 %%%===================================================================
@@ -48,7 +52,10 @@ start_link(Release) ->
 %% @end
 %%--------------------------------------------------------------------
 init({RelName, RelVersion}) ->
-        {ok, #state{ name = RelName, version = RelVersion }}.
+  erlang:process_flag(trap_exit, true),
+  {ok, [[Root]]} = init:get_argument(root),
+  gen_server:cast(self(), start),
+  {ok, #state{ root = Root, name = RelName, version = RelVersion }}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -78,8 +85,14 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast(_Msg, State) ->
-        {noreply, State}.
+handle_cast(start, #state{ root = Root, name = Name, version = Version } = State) ->
+  Erl = filename:join([Root, "bin", "erl"]),
+  Release = filename:join([Root, "releases", Version, Name]),
+  NodeName = binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ erel_net_manager:hostname(),
+  Cookie = erel_net_manager:cookie(list_to_atom(NodeName)),
+  Port = open_port({spawn_executable, Erl},[{args, ["-detached","-boot", Release, "-name", NodeName, "-eval", "\"erlang:set_cookie(" ++ atom_to_list(node()) ++ ",'" ++ atom_to_list(Cookie) ++"').\""]}]),
+  link(Port),
+  {noreply, State#state{ port = Port, node = list_to_atom(NodeName), cookie = Cookie }}.
 
 %%--------------------------------------------------------------------
 %% @private
