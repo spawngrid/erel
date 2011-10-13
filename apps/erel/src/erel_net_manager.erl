@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, cookie/1]).
+-export([start_link/0, cookie/1, hostname/0, name/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -12,10 +12,11 @@
 -define(SERVER, ?MODULE). 
 
 -record(state, {
-          name,
-          net_kernel,
-          cookies = []
-         }).
+    hostname :: string(),
+    name :: atom(),
+    net_kernel :: pid(),
+    cookies = [] :: [{atom(), atom()}]
+  }).
 
 %%%===================================================================
 %%% API
@@ -23,7 +24,14 @@
 
 cookie(Node) ->
     gen_server:call(?SERVER, {cookie, Node}).
-    
+
+hostname() ->
+    gen_server:call(?SERVER, {info, hostname}).
+
+name() ->
+    gen_server:call(?SERVER, {info, name}).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -54,21 +62,23 @@ init([]) ->
     
     erlang:process_flag(trap_exit, true),
 
-    {Hostname, Domain} = {inet_db:gethostname(),inet_db:res_option(domain)},
-
     case node() of
       'nonode@nohost' ->
-        Name = list_to_atom(binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ Hostname ++ "." ++ Domain),
+        {Host, Domain} = {inet_db:gethostname(),inet_db:res_option(domain)},
+        Hostname = Host ++ "." ++ Domain,
+        Name = list_to_atom(binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ Hostname),
         os:cmd(filename:join([Root, "bin", "epmd"]) ++ " -daemon"), %% ensure epmd is running
         {ok, Pid} = net_kernel:start([Name, longnames]),
         NetKernel = erlang:monitor(process, Pid);
       Name ->
+        Hostname = lists:nth(2, string:tokens(atom_to_list(Name), "@")),
         NetKernel = undefined
     end,
 
 
     {ok, #state{
        name = Name,
+       hostname = Hostname,
        net_kernel = NetKernel
       }}.
 
@@ -86,6 +96,11 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_call({info, hostname}, _From, #state{ hostname = Hostname } = State) ->
+  {reply, Hostname, State};
+handle_call({info, name}, _From, #state{ name = Name } = State) ->
+  {reply, Name, State};
+
 handle_call({cookie, Node}, _From, #state{ cookies = Cookies } = State) ->
     case proplists:get_value(Node, Cookies) of
         undefined ->
