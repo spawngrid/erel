@@ -71,7 +71,7 @@ init({RelName, RelVersion}) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call(stop, _From, #state{ port = Port, node = Node } = State) ->
+handle_call(stop, _From, #state{ node = Node } = State) ->
   rpc:call(Node, init, stop, []),
   {stop, normal, State};
 handle_call(_Request, _From, State) ->
@@ -94,7 +94,8 @@ handle_cast(start, #state{ root = Root, name = Name, version = Version } = State
   NodeName = binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ erel_net_manager:hostname(),
   Cookie = erel_net_manager:cookie(list_to_atom(NodeName)),
   Port = open_port({spawn_executable, Erl},[{args, ["-detached","-boot", Release, "-name", NodeName, "-eval", "\"erlang:set_cookie(" ++ atom_to_list(node()) ++ ",'" ++ atom_to_list(Cookie) ++"').\""]}]),
-  link(Port),
+  port_connect(Port, whereis(application_controller)),
+  unlink(Port),
   {noreply, State#state{ port = Port, node = list_to_atom(NodeName), cookie = Cookie }}.
 
 %%--------------------------------------------------------------------
