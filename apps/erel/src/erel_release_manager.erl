@@ -96,7 +96,7 @@ init([]) ->
 handle_call({instantiate, Release, Version, Options}, _From, #state{ root = Root, releases = Releases } = State) ->
     case lists:member({Release, Version}, Releases) of
         true ->
-          {ok, Pid} = supervisor:start_child(erel_instance_sup, esupervisor:spec(#worker{ id = {Release, Version}, start_func = {erel_instance, start_link, [{Release, Version}]}, modules = [erel_instance]})),
+          {ok, Pid} = supervisor:start_child(erel_instance_sup, esupervisor:spec(#worker{ id = {Release, Version}, start_func = {erel_instance, start_link, [{Release, Version}]}, modules = [erel_instance], restart = transient})),
           {reply, {ok, Pid}, State};
         false ->
           {reply, {error, notfound}, State}

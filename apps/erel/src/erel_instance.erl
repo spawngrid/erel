@@ -71,9 +71,12 @@ init({RelName, RelVersion}) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_call(stop, _From, #state{ port = Port, node = Node } = State) ->
+  rpc:call(Node, init, stop, []),
+  {stop, normal, State};
 handle_call(_Request, _From, State) ->
-        Reply = ok,
-        {reply, Reply, State}.
+  Reply = ok,
+  {reply, Reply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
