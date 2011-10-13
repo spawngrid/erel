@@ -4,8 +4,8 @@
 
 %% API
 -export([start_link/0,
-         instantiate/4,
-         releases/1, releases/0, inject_erel/2]).
+         instantiate/3,
+          releases/0, inject_erel/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -24,12 +24,9 @@
 %%% API
 %%%===================================================================
 
-instantiate(Node, Release, Version, Options) ->
-    gen_server:call({?SERVER, Node}, {instantiate, Release, Version, Options}).
+instantiate(Release, Version, Options) ->
+    gen_server:call(?SERVER, {instantiate, Release, Version, Options}).
                                             
-releases(Node) ->
-    gen_server:call({?SERVER, Node}, releases).
-
 releases() ->
     gen_server:call(?SERVER, releases).
 
