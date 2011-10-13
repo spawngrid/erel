@@ -34,6 +34,10 @@ init([]) ->
                           #worker{
                              id = erel_net_manager
                             },
+                          #one_for_one{
+                             id = erel_instance_sup,
+                             registered = erel_instance_sup
+                          },
                           #worker{
                                    id = erel_release_manager
                             }

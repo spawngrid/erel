@@ -2,6 +2,8 @@
 
 -behaviour(gen_server).
 
+-include_lib("esupervisor/include/esupervisor.hrl").
+
 %% API
 -export([start_link/0,
          instantiate/3,
@@ -15,9 +17,7 @@
 
 -record(state, {
           root,
-          releases = [],
-          instantiated = [],
-          ports = []
+          releases = []
          }).
 
 %%%===================================================================
@@ -93,15 +93,13 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({instantiate, Release, Version, Options}, _From, #state{ root = Root, releases = Releases, instantiated = Instantiated, ports = Ports } = State) ->
+handle_call({instantiate, Release, Version, Options}, _From, #state{ root = Root, releases = Releases } = State) ->
     case lists:member({Release, Version}, Releases) of
         true ->
-            Port = instantiate_release(Root, Release, Version, Options),
-            {reply, ok, State#state{ instantiated = [{{Release, Version}, Port}|Instantiated],
-                                     ports = [{Port, {Release, Version}}|Ports]
-                                   }};
+          {ok, Pid} = supervisor:start_child(erel_instance_sup, esupervisor:spec(#worker{ id = {Release, Version}, start_func = {erel_instance, start_link, [{Release, Version}]}, modules = [erel_instance]})),
+          {reply, {ok, Pid}, State};
         false ->
-            {reply, {error, notfound}, State}
+          {reply, {error, notfound}, State}
     end;
 
 handle_call(releases, _From, #state{ releases = Releases } = State) ->
@@ -178,23 +176,6 @@ sort_releases(Root) ->
       end || Release <- filelib:wildcard("*/*.rel", RelDir) ],
     ok.
 
--define(with_option(X, Name, Args),  case proplists:get_value(X, Options) of
-                                         undefined ->
-                                             [];
-                                         Name ->
-                                             Args
-                                                 
-                                     end).
-
-instantiate_release(Root, Release, Version, Options) ->
-    Erl = filename:join([Root, "bin", "erl"]),
-    Args = ?with_option(<<"shortname">>, Shortname, ["-sname", binary_to_list(Shortname)]),
-    open_port({spawn_executable, Erl},[{args, ["-detached","-boot",filename:join([Root, "releases", Version, Release])|
-                                               Args]},
-                                       exit_status,
-                                       hide]).
-                                               
-                                       
 copy_dep(ErelDir, RelDir, Name, Version) when is_atom(Name) ->
  copy_dep(ErelDir, RelDir, atom_to_list(Name), Version);
 copy_dep(ErelDir, RelDir, Name, Version) ->
