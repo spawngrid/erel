@@ -40,7 +40,10 @@ init([]) ->
                           },
                           #worker{
                                    id = erel_release_manager
-                            }
+                            },
+                          #worker{ 
+                                   id = erel_server
+                          }
                           | 
                           EndpointSups
                          ]
