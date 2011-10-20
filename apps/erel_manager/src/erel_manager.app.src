@@ -1,19 +1,17 @@
-{application, erel_master,
+{application, erel_manager,
  [
-  {description, "erel host master"},
+  {description, ""},
   {vsn, git},
   {registered, []},
   {applications, [
                   kernel,
                   stdlib,
                   sasl,
-                  os_mon,
                   alog,
-                  esupervisor,
                   erel_common,
                   gen_bunny
                  ]},
-  {mod, { erel_master_app, []}},
+  {mod, { erel_manager_app, []}},
   {env, [
            {amqp_host, "localhost"}, {amqp_port, 5672}, {amqp_username, "guest"},
            {amqp_password, "guest"}, {amqp_vhost, "/"},

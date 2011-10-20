@@ -7,5 +7,5 @@ release: compile
 	@rebar generate
 
 example: release
-	@rm -rf apps/erel/example/rel/example
-	@cd apps/erel/example && rebar generate
+	@rm -rf example/rel/example
+	@cd example && rebar generate

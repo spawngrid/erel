@@ -1,5 +1,5 @@
--module(erel_master_sup).
--include_lib("erel_master/include/erel_master.hrl").
+-module(erel_manager_sup).
+-include_lib("erel_manager/include/erel_manager.hrl").
 -behaviour(esupervisor).
 
 %% API
@@ -19,21 +19,13 @@ start_link() ->
 %% ===================================================================
 %% Supervisor callbacks
 %% ===================================================================
-
 init([]) ->
   #one_for_one{
     children = [
-      #worker{
-        id = erel_net_manager
-      },
       #one_for_one{
-        id = erel_master_group_sup,
-        registered = erel_master_group_sup
+        id = erel_manager_group_sup,
+        registered = erel_manager_group_sup
       },
-      #one_for_one {
-        id = erel_master_file_receiver_sup,
-        registered = erel_master_file_receiver_sup
-      },
-      ?endp_worker(erel_master_host, erel_master_host, undefined)
+      ?endp_worker(erel_manager_host, erel_manager_host, undefined)
     ]
   }.
