@@ -65,6 +65,10 @@ init([]) ->
 %%--------------------------------------------------------------------
 handle_call(release_list, _From, State) ->
   {reply, erel_release_manager:releases(), State};
+handle_call({release_instances, Release}, _From, State) ->
+  Children = supervisor:which_children(erel_instance_sup),
+  Reply = [ Pid || {Id, Pid, _, _} <- Children,Id =:= Release ],
+  {reply, {ok, Reply}, State};
 handle_call({release_instantiate, Release}, From, State) ->
   handle_call({release_instantiate, Release, []}, From, State);
 handle_call({release_instantiate, {Name, Version}, Opts}, _From, State) ->
