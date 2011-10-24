@@ -91,12 +91,12 @@ handle_cast({chunk, Crc, Chunk, Chunks, ChunkSize, Part},
       ?INFO("Finished receiving file"),
       {stop, normal, State#state{ expected_chunk = 1 }};
     false ->
-      ?INFO("Received chunk ~p",[Chunk]),
+      ?DBG("Received chunk ~p",[Chunk]),
       %% write pending out of order chunks
       OOOSorted = lists:usort(fun ({C1, _},{C2,_}) -> C1 =< C2 end, OOO),
       ToWrite = lists:reverse(element(2, 
                 lists:foldl(fun ({N, _}=C,{I,Acc}) when N-1 == I -> {N, [C|Acc]}; (_, Acc) -> Acc end, {Chunk, []}, OOOSorted))),
-      length(ToWrite) > 0 andalso ?INFO("Writing pending chunks ~w",[lists:map(fun({N,_}) -> N end, ToWrite)]),
+      length(ToWrite) > 0 andalso ?DBG("Writing pending chunks ~w",[lists:map(fun({N,_}) -> N end, ToWrite)]),
       [ write_chunk(Crc, ChunkPart) || {_, ChunkPart} <- ToWrite ], 
       NewExpectation = case ToWrite of 
         [] -> ExpectedChunk + 1;
@@ -109,7 +109,7 @@ handle_cast({chunk, Crc, Chunk, ExpectedChunks, ChunkSize, Part},
   #state{ crc = Crc, expected_chunk = ExpectedChunk,
           chunks = ExpectedChunks,
           out_of_order_chunks = Chunks } = State) when ChunkSize == size(Part) ->
-  ?INFO("Received an out of order chunk ~p, was expecting ~p",[Chunk, ExpectedChunk]),
+  ?DBG("Received an out of order chunk ~p, was expecting ~p",[Chunk, ExpectedChunk]),
   case Chunks of
     [] ->
       EarliestChunk = none;
@@ -118,7 +118,7 @@ handle_cast({chunk, Crc, Chunk, ExpectedChunks, ChunkSize, Part},
   end, 
   case (EarliestChunk == ExpectedChunk) of
     true ->
-      ?INFO("Found a predecessor chunk for ~p, writing both",[Chunk]),
+      ?DBG("Found a predecessor chunk for ~p, writing both",[Chunk]),
       write_chunk(Crc, proplists:get_value(EarliestChunk, Chunks)),
       write_chunk(Crc, Part),
       {noreply, State#state{ out_of_order_chunks = lists:keydelete(EarliestChunk, 1, Chunks) }};
