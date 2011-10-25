@@ -102,7 +102,13 @@ handle_cast({chunk, Crc, Chunk, Chunks, ChunkSize, Part},
         [] -> ExpectedChunk + 1;
         [_|_] -> {N, _} = hd(lists:reverse(ToWrite)), N+1
       end,
-      {noreply, State#state{ expected_chunk = NewExpectation, out_of_order_chunks = OOO -- ToWrite}}
+      case NewExpectation - 1 of
+        Chunks ->
+          ?INFO("Finished receiving file"),
+          {stop, normal, State#state{ expected_chunk = 1 }};
+        _ ->
+          {noreply, State#state{ expected_chunk = NewExpectation, out_of_order_chunks = OOO -- ToWrite}}
+      end
   end;
 
 handle_cast({chunk, Crc, Chunk, ExpectedChunks, ChunkSize, Part}, 
