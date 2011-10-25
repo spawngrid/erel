@@ -32,6 +32,9 @@ handle_message({deploy, Attributes, Crc, Chunks}, #state{} = State) ->
       restart = transient })) of 
     {ok, Pid} ->
        ?DBG("Started file receiver for crc32 of ~p, pid ~p", [Crc, Pid]);
+    {error, already_present} -> %% stale name to be removed
+      supervisor:delete_child(erel_master_file_receiver_sup, Crc),
+      handle_message({deploy, Attributes, Crc, Chunks}, State);
     {error, {already_started, Pid}} ->
        ?DBG("File receiver for crc32 of ~p was already started, pid ~p",[Crc, Pid])
    end,
@@ -47,6 +50,9 @@ handle_message({chunk, Crc, Chunk, Chunks, ChunkSize, Part}=Msg, #state{} = Stat
       restart = transient })),
      ?DBG("Started file receiver for crc32 of ~p, pid ~p", [Crc, Pid]),
      gen_server:cast(Pid, Msg);
+    {_, undefined, _, _} -> %% stale spec
+       sueprvisor:delete_child(erel_master_file_receiver_sup, Crc),
+       handle_message(Msg, State);
     {_, Pid, _, _} -> %% found it
       gen_server:cast(Pid, Msg)
   end,
