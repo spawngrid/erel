@@ -17,7 +17,7 @@ init(Endpoint, _) ->
 handle_message(ping, #state{ endpoint = Endpoint, hostname = Hostname } = State) ->
   ?INFO("Ping received, replying"),
   erel_endp:cast(Endpoint, erel, "erel.host", {pong, Hostname}),
-  {noreply, State};
+  {ok, State};
 
 handle_message({join, Hostname, Group}, #state{ hostname = Hostname } = State) ->
   ?INFO("Group join request received, group name '~s'", [Group]),

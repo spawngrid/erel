@@ -17,7 +17,7 @@ init(Endpoint, Group) ->
 handle_message(ping, #state{ endpoint = Endpoint, hostname = Hostname, group = Group, topic = Topic } = State) ->
   ?INFO("Group ('~s') ping received, replying", [Group]),
   erel_endp:cast(Endpoint, erel, Topic, {pong, Hostname}),
-  {noreply, State};
+  {ok, State};
 
 handle_message({announce, Hostname}, #state{ hostname = Hostname } = State) -> %% our own announce message, ignore
   {ok, State};
