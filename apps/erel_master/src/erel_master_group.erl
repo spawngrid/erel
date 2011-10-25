@@ -51,7 +51,7 @@ handle_message({chunk, Crc, Chunk, Chunks, ChunkSize, Part}=Msg, #state{} = Stat
      ?DBG("Started file receiver for crc32 of ~p, pid ~p", [Crc, Pid]),
      gen_server:cast(Pid, Msg);
     {_, undefined, _, _} -> %% stale spec
-       sueprvisor:delete_child(erel_master_file_receiver_sup, Crc),
+       supervisor:delete_child(erel_master_file_receiver_sup, Crc),
        handle_message(Msg, State);
     {_, Pid, _, _} -> %% found it
       gen_server:cast(Pid, Msg)
