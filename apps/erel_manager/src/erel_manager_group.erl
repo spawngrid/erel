@@ -1,7 +1,7 @@
 -module(erel_manager_group).
 -export([binding/1, init/2, handle_message/2, handle_cast/2, handle_call/3]).
 
--include_lib("erel_master/include/erel_master.hrl").
+-include_lib("erel_manager/include/erel_manager.hrl").
 
 -record(state, { endpoint :: pid(), group :: string() }).
 
