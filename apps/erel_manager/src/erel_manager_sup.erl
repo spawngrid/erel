@@ -26,6 +26,10 @@ init([]) ->
         id = erel_manager_group_sup,
         registered = erel_manager_group_sup
       },
+      #one_for_one{
+        id = erel_manager_quorum_sup,
+        registered = erel_manager_quorum_sup
+      },
       ?endp_worker(erel_manager_host, erel_manager_host, undefined)
     ]
   }.

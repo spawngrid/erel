@@ -14,6 +14,11 @@ init(Endpoint, _) ->
   ?INFO("Joined as a host '~s'", [Hostname]),
   {ok, #state{ endpoint = Endpoint , hostname = Hostname}}.
 
+handle_message(ping, #state{ endpoint = Endpoint, hostname = Hostname } = State) ->
+  ?INFO("Ping received, replying"),
+  erel_endp:cast(Endpoint, erel, "erel.host", {pong, Hostname}),
+  {noreply, State};
+
 handle_message({join, Hostname, Group}, #state{ hostname = Hostname } = State) ->
   ?INFO("Group join request received, group name '~s'", [Group]),
   Groups = supervisor:which_children(erel_master_group_sup),
@@ -30,15 +35,15 @@ handle_message({join, Hostname, Group}, #state{} = State) ->
   ?INFO("Group join request received for the group '~s' for the other host '~s', ignoring", [Group, Hostname]),
   {ok, State};
 
-handle_message({host, Hostname, Attributes}, #state{} = State) ->
-  ?INFO("Host '~s' joined with following attributes: ~p", [Hostname, Attributes]),
+handle_message({announce, Hostname}, #state{} = State) ->
+  ?INFO("Host '~s' joined", [Hostname]),
   {ok, State};
 
 handle_message(_, #state{} = State) ->
   {ok, State}.
 
 handle_cast(announce, #state{ endpoint = Endpoint, hostname = Hostname } = State) ->
-  erel_endp:cast(Endpoint, erel, "erel.host", {host, Hostname, host_attributes()}),
+  erel_endp:cast(Endpoint, erel, "erel.host", {announce, Hostname}),
   {noreply, State}.
 
 handle_call(_, _, State) ->

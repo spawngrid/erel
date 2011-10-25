@@ -3,20 +3,25 @@
 
 -include_lib("erel_master/include/erel_master.hrl").
 
--record(state, { endpoint :: pid(), hostname :: string(), group :: string() }).
+-record(state, { endpoint :: pid(), hostname :: string(), group :: string(), topic :: string() }).
 
 binding(Group) ->
   #endp_binding{ name = erel, type = topic, topic = group_topic(Group) }.
 
 init(Endpoint, Group) ->
   Hostname = erel_master:hostname(),
-  erel_endp:cast(Endpoint, erel, group_topic(Group), {join, Hostname}),
+  erel_endp:cast(Endpoint, erel, group_topic(Group), {announce, Hostname}),
   ?INFO("Announced host '~s' to the group '~s'", [Hostname, Group]),
-  {ok, #state{ endpoint = Endpoint, hostname = Hostname, group = Group }}.
+  {ok, #state{ endpoint = Endpoint, hostname = Hostname, group = Group, topic = group_topic(Group) }}.
 
-handle_message({join, Hostname}, #state{ hostname = Hostname } = State) -> %% our own join message, ignore
+handle_message(ping, #state{ endpoint = Endpoint, hostname = Hostname, group = Group, topic = Topic } = State) ->
+  ?INFO("Group ('~s') ping received, replying", [Group]),
+  erel_endp:cast(Endpoint, erel, Topic, {pong, Hostname}),
+  {noreply, State};
+
+handle_message({announce, Hostname}, #state{ hostname = Hostname } = State) -> %% our own announce message, ignore
   {ok, State};
-handle_message({join, Hostname}, #state{} = State) -> %% some other host's join message, ignore
+handle_message({announce, Hostname}, #state{} = State) -> %% some other host's announce message, ignore
   {ok, State};
 
 handle_message({deploy, Attributes, Crc, Chunks}, #state{} = State) ->
