@@ -20,9 +20,9 @@ sort(Terms) ->
                 directive_priority(element(1, C1)) =< directive_priority(element(1,C2))
             end, Terms).
 % where
-  directive_priority(group) -> 2;
   directive_priority(release) -> 0;
   directive_priority(deploy) -> 1;
+  directive_priority(group) -> 2;
   directive_priority(_) -> 100.
 
 interpret({group, Name, Hosts}, Props) ->
