@@ -28,7 +28,7 @@ sort(Terms) ->
 interpret({group, Name, Hosts}, Props) ->
   Fun = fun() ->
       ?INFO("Quorum for group '~s' has been reached", [Name]),
-      kill_quorum("erel.host", Hosts),
+      erel_manager_quorum:stop("erel.host", Hosts),
       group_join(Name, Hosts, proplists:get_value(commands, Props, []))
   end,
   erel_manager_quorum:start("erel.host", Hosts, Fun),
@@ -46,13 +46,8 @@ interpret(_, Props) ->
 group_join(Name, Hosts, Cmds) ->
   Fun = fun() ->
       ?INFO("All required hosts for group '~s' have joined the group topic", [Name]),
-      kill_quorum("erel.group." ++ Name, Hosts),
+      erel_manager_quorum:stop("erel.group." ++ Name, Hosts),
       [ Cmd() || Cmd <- Cmds ]
   end,
   erel_manager_quorum:start("erel.group." ++ Name, Hosts, Fun),
   [ erel_manager:group_join(Name, Host) || Host <- Hosts ].
-  
-kill_quorum(Topic, Hosts) ->
-      supervisor:terminate_child(erel_manager_quorum_sup, {Topic, Hosts}),
-      supervisor:delete_child(erel_manager_quorum_sup, {Topic, Hosts}).
-

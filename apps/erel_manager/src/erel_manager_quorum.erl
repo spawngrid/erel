@@ -1,15 +1,19 @@
 -module(erel_manager_quorum).
--export([start/3]).
+-export([start/3, stop/2]).
 -export([binding/1, init/2, handle_message/2, handle_cast/2, handle_call/3]).
 
 -include_lib("erel_manager/include/erel_manager.hrl").
 
 -record(state, { endpoint :: pid(),  expected = [] :: list(string()), cb :: fun(() -> any()) }).
 
-start(Topic, Nodes, Fun) ->
+start(Topic, Hosts, Fun) ->
   {ok, Endpoint} = application:get_env(erel_manager, endpoint),  
   supervisor:start_child(erel_manager_quorum_sup, 
-    esupervisor:spec(?endp_worker(Endpoint, {Topic, Nodes}, ?MODULE, {Topic, Nodes, Fun}))).
+    esupervisor:spec(?endp_worker(Endpoint, {Topic, Hosts}, ?MODULE, {Topic, Hosts, Fun}))).
+
+stop(Topic, Hosts) ->
+  supervisor:terminate_child(erel_manager_quorum_sup, {Topic, Hosts}),
+  supervisor:delete_child(erel_manager_quorum_sup, {Topic, Hosts}).
 
 binding({Topic, _Expected, _Fun}) ->
   #endp_binding{ name = erel, type = topic, topic = Topic }.
