@@ -87,11 +87,11 @@ handle_cast({chunk, Id, Crc, Chunk, Chunks, ChunkSize, Part},
           out_of_order_chunks = OOO,
           expected_chunk = ExpectedChunk } = State) when ExpectedChunk == Chunk andalso  
                                                         ChunkSize == size(Part) ->
-  write_chunk(Crc, Part),
+  write_chunk(Id, Part),
   case Chunks == Chunk of
     true ->
       ?INFO("Finished receiving file"),
-      gen_server:cast(GroupHandler, {received, Id, Crc, filename(Crc)}),
+      gen_server:cast(GroupHandler, {received, Id, Crc, filename(Id)}),
       {stop, normal, State#state{ expected_chunk = 1 }};
     false ->
       ?DBG("Received chunk ~p",[Chunk]),
@@ -100,7 +100,7 @@ handle_cast({chunk, Id, Crc, Chunk, Chunks, ChunkSize, Part},
       ToWrite = lists:reverse(element(2, 
                 lists:foldl(fun ({N, _}=C,{I,Acc}) when N-1 == I -> {N, [C|Acc]}; (_, Acc) -> Acc end, {Chunk, []}, OOOSorted))),
       length(ToWrite) > 0 andalso ?DBG("Writing pending chunks ~w",[lists:map(fun({N,_}) -> N end, ToWrite)]),
-      [ write_chunk(Crc, ChunkPart) || {_, ChunkPart} <- ToWrite ], 
+      [ write_chunk(Id, ChunkPart) || {_, ChunkPart} <- ToWrite ], 
       NewExpectation = case ToWrite of 
         [] -> ExpectedChunk + 1;
         [_|_] -> {N, _} = hd(lists:reverse(ToWrite)), N+1
@@ -108,14 +108,14 @@ handle_cast({chunk, Id, Crc, Chunk, Chunks, ChunkSize, Part},
       case NewExpectation - 1 of
         Chunks ->
           ?INFO("Finished receiving file"),
-          gen_server:cast(GroupHandler, {received, Id, Crc, filename(Crc)}),
+          gen_server:cast(GroupHandler, {received, Id, Crc, filename(Id)}),
           {stop, normal, State#state{ expected_chunk = 1 }};
         _ ->
           {noreply, State#state{ expected_chunk = NewExpectation, out_of_order_chunks = OOO -- ToWrite}}
       end
   end;
 
-handle_cast({chunk, _Id, Crc, Chunk, ExpectedChunks, ChunkSize, Part}, 
+handle_cast({chunk, Id, Crc, Chunk, ExpectedChunks, ChunkSize, Part}, 
   #state{ crc = Crc, expected_chunk = ExpectedChunk,
           chunks = ExpectedChunks,
           out_of_order_chunks = Chunks } = State) when ChunkSize == size(Part) ->
@@ -129,8 +129,8 @@ handle_cast({chunk, _Id, Crc, Chunk, ExpectedChunks, ChunkSize, Part},
   case (EarliestChunk == ExpectedChunk) of
     true ->
       ?DBG("Found a predecessor chunk for ~p, writing both",[Chunk]),
-      write_chunk(Crc, proplists:get_value(EarliestChunk, Chunks)),
-      write_chunk(Crc, Part),
+      write_chunk(Id, proplists:get_value(EarliestChunk, Chunks)),
+      write_chunk(Id, Part),
       {noreply, State#state{ out_of_order_chunks = lists:keydelete(EarliestChunk, 1, Chunks) }};
     false -> 
       {noreply, State#state{ out_of_order_chunks = [{Chunk, Part}|Chunks] }}
@@ -182,21 +182,22 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-write_chunk(Crc, Binary) ->
-  Filename = filename(Crc),
+write_chunk(Id, Binary) ->
+  Filename = filename(Id),
   filelib:ensure_dir(Filename),
   {ok, File} = file:open(Filename, [append, binary]),
   ok = file:write(File, Binary),
   file:close(File),
   ok.
 
-filename(Crc) ->
-  CrcS = integer_to_list(Crc),
+filename(Id) when is_binary(Id) ->
+  filename(binary_to_list(Id));
+filename(Id) ->
   case application:get_env(erel_master, dir) of
     {ok, Dir} ->
       ok;
     _ ->
       {ok, Dir} = file:get_cwd()
   end,
-  filename:absname(filename:join([Dir, "files", CrcS, "file.zip"])).
+  filename:absname(filename:join([Dir, "files", Id ++ ".zip"])).
  

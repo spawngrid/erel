@@ -120,7 +120,7 @@ deployment(run, #state{ deployments = [{_Release, []}|Deployments] } = State) ->
 deployment(run, #state{ deployments = [{Release, [Group|Groups]}|Deployments], 
                         joined_groups = JoinedGroups, releases = Releases } = State) -> % deploy
   Self = self(),
-  Id = ossp_uuid:make(v4, binary),
+  Id = ossp_uuid:make(v4, text),
   Fun = fun () -> gen_fsm:send_event(Self, {transfer_completed, Group}) end,
   erel_manager_quorum:start(none, {received, Id}, "erel.group." ++ Group, proplists:get_value(Group, JoinedGroups), Fun),
   erel_manager:group_transfer(Id, Group, proplists:get_value(Release, Releases), []),
