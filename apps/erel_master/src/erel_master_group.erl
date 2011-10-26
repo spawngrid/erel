@@ -59,7 +59,6 @@ handle_message({chunk, Id, Crc, Chunk, Chunks, ChunkSize, Part}=Msg, #state{} = 
   {ok, State};
 
 handle_message(Message, #state{ group = Group } = State) ->
-  ?WARNING("Unexpected message received in the group '~s': ~p",[Group, Message]),
   {ok, State}.
 
 handle_cast({received, Id, Crc, Filename}, #state{ endpoint = Endpoint, topic = Topic,
