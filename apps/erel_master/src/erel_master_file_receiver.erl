@@ -80,15 +80,17 @@ handle_call(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_cast({chunk, Crc, Chunk, Chunks, ChunkSize, Part}, 
-  #state{ crc = Crc, 
+  #state{ group_handler = GroupHandler,
+          crc = Crc, 
           chunks = Chunks,
           out_of_order_chunks = OOO,
           expected_chunk = ExpectedChunk } = State) when ExpectedChunk == Chunk andalso  
-                                                         ChunkSize == size(Part) ->
+                                                        ChunkSize == size(Part) ->
   write_chunk(Crc, Part),
   case Chunks == Chunk of
     true ->
       ?INFO("Finished receiving file"),
+      gen_server:cast(GroupHandler, {received, Crc}),
       {stop, normal, State#state{ expected_chunk = 1 }};
     false ->
       ?DBG("Received chunk ~p",[Chunk]),
@@ -105,6 +107,7 @@ handle_cast({chunk, Crc, Chunk, Chunks, ChunkSize, Part},
       case NewExpectation - 1 of
         Chunks ->
           ?INFO("Finished receiving file"),
+          gen_server:cast(GroupHandler, {received, Crc}),
           {stop, normal, State#state{ expected_chunk = 1 }};
         _ ->
           {noreply, State#state{ expected_chunk = NewExpectation, out_of_order_chunks = OOO -- ToWrite}}
