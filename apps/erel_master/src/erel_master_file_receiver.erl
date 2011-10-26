@@ -90,7 +90,7 @@ handle_cast({chunk, Crc, Chunk, Chunks, ChunkSize, Part},
   case Chunks == Chunk of
     true ->
       ?INFO("Finished receiving file"),
-      gen_server:cast(GroupHandler, {received, Crc}),
+      gen_server:cast(GroupHandler, {received, Crc, filename(Crc)}),
       {stop, normal, State#state{ expected_chunk = 1 }};
     false ->
       ?DBG("Received chunk ~p",[Chunk]),
@@ -107,7 +107,7 @@ handle_cast({chunk, Crc, Chunk, Chunks, ChunkSize, Part},
       case NewExpectation - 1 of
         Chunks ->
           ?INFO("Finished receiving file"),
-          gen_server:cast(GroupHandler, {received, Crc}),
+          gen_server:cast(GroupHandler, {received, Crc, filename(Crc)}),
           {stop, normal, State#state{ expected_chunk = 1 }};
         _ ->
           {noreply, State#state{ expected_chunk = NewExpectation, out_of_order_chunks = OOO -- ToWrite}}
@@ -182,6 +182,14 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 write_chunk(Crc, Binary) ->
+  Filename = filename(Crc),
+  filelib:ensure_dir(Filename),
+  {ok, File} = file:open(Filename, [append, binary]),
+  ok = file:write(File, Binary),
+  file:close(File),
+  ok.
+
+filename(Crc) ->
   CrcS = integer_to_list(Crc),
   case application:get_env(erel_master, dir) of
     {ok, Dir} ->
@@ -189,10 +197,5 @@ write_chunk(Crc, Binary) ->
     _ ->
       {ok, Dir} = file:get_cwd()
   end,
-  filelib:ensure_dir(filename:join([Dir, "files", CrcS]) ++ "/"),
-  {ok, File} = file:open(filename:join([Dir, "files", CrcS,"file.zip"]), [append, binary]),
-  ok = file:write(File, Binary),
-  file:close(File),
-  ok.
-
-
+  filename:absname(filename:join([Dir, "files", CrcS, "file.zip"])).
+ 

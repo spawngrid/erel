@@ -62,8 +62,8 @@ handle_message(Message, #state{ group = Group } = State) ->
   ?WARNING("Unexpected message received in the group '~s': ~p",[Group, Message]),
   {ok, State}.
 
-handle_cast({received, Crc}, #state{} = State) ->
-  ?DBG("File with crc32 of ~p has been fully received", [Crc]),
+handle_cast({received, Crc, Filename}, #state{} = State) ->
+  ?DBG("File with crc32 of ~p has been fully received and saved to ~s", [Crc, Filename]),
   {noreply, State};
 
 handle_cast(_, State) ->
