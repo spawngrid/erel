@@ -4,7 +4,7 @@
 -include_lib("erel_master/include/erel_master.hrl").
 
 %% API
--export([start_link/3]).
+-export([start_link/4]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -14,7 +14,7 @@
          terminate/2,
          code_change/3]).
 
--record(state, { group_handler :: pid(), crc :: integer(), chunks :: integer(),
+-record(state, { id :: term(), group_handler :: pid(), crc :: integer(), chunks :: integer(),
     expected_chunk = 1 :: integer(), out_of_order_chunks = [] :: list({integer(), binary()}) }).
 
 %%%===================================================================
@@ -28,8 +28,8 @@
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(GroupHandler, Crc, Chunks) ->
-        gen_server:start_link(?MODULE, {GroupHandler, Crc, Chunks}, []).
+start_link(GroupHandler, Id, Crc, Chunks) ->
+        gen_server:start_link(?MODULE, {GroupHandler, Id, Crc, Chunks}, []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -46,8 +46,9 @@ start_link(GroupHandler, Crc, Chunks) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init({GroupHandler, Crc, Chunks}) ->
+init({GroupHandler, Id, Crc, Chunks}) ->
         {ok, #state{
+              id = Id,
               group_handler = GroupHandler, crc = Crc, 
               chunks = Chunks
             }}.
@@ -79,8 +80,8 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast({chunk, Crc, Chunk, Chunks, ChunkSize, Part}, 
-  #state{ group_handler = GroupHandler,
+handle_cast({chunk, Id, Crc, Chunk, Chunks, ChunkSize, Part}, 
+  #state{ group_handler = GroupHandler, id = Id,
           crc = Crc, 
           chunks = Chunks,
           out_of_order_chunks = OOO,
@@ -90,7 +91,7 @@ handle_cast({chunk, Crc, Chunk, Chunks, ChunkSize, Part},
   case Chunks == Chunk of
     true ->
       ?INFO("Finished receiving file"),
-      gen_server:cast(GroupHandler, {received, Crc, filename(Crc)}),
+      gen_server:cast(GroupHandler, {received, Id, Crc, filename(Crc)}),
       {stop, normal, State#state{ expected_chunk = 1 }};
     false ->
       ?DBG("Received chunk ~p",[Chunk]),
@@ -107,14 +108,14 @@ handle_cast({chunk, Crc, Chunk, Chunks, ChunkSize, Part},
       case NewExpectation - 1 of
         Chunks ->
           ?INFO("Finished receiving file"),
-          gen_server:cast(GroupHandler, {received, Crc, filename(Crc)}),
+          gen_server:cast(GroupHandler, {received, Id, Crc, filename(Crc)}),
           {stop, normal, State#state{ expected_chunk = 1 }};
         _ ->
           {noreply, State#state{ expected_chunk = NewExpectation, out_of_order_chunks = OOO -- ToWrite}}
       end
   end;
 
-handle_cast({chunk, Crc, Chunk, ExpectedChunks, ChunkSize, Part}, 
+handle_cast({chunk, _Id, Crc, Chunk, ExpectedChunks, ChunkSize, Part}, 
   #state{ crc = Crc, expected_chunk = ExpectedChunk,
           chunks = ExpectedChunks,
           out_of_order_chunks = Chunks } = State) when ChunkSize == size(Part) ->

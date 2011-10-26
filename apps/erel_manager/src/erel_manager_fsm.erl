@@ -117,10 +117,18 @@ group_join(group_joined, #state{ groups = [{Group, Hosts}|Groups], joined_groups
 deployment(run, #state{ deployments = [{_Release, []}|Deployments] } = State) -> % deployment is complete
   gen_fsm:send_event(self(), run),
   {next_state, ready, State#state{ deployments = Deployments }};
-deployment(run, #state{ deployments = [{Release, [Group|Groups]}|Deployments], releases = Releases } = State) -> % deploy
-  erel_manager:group_transfer(Group, proplists:get_value(Release, Releases), []),
+deployment(run, #state{ deployments = [{Release, [Group|Groups]}|Deployments], 
+                        joined_groups = JoinedGroups, releases = Releases } = State) -> % deploy
+  Self = self(),
+  Id = ossp_uuid:make(v4, binary),
+  Fun = fun () -> gen_fsm:send_event(Self, {transfer_completed, Group}) end,
+  erel_manager_quorum:start(none, {received, Id}, "erel.group." ++ Group, proplists:get_value(Group, JoinedGroups), Fun),
+  erel_manager:group_transfer(Id, Group, proplists:get_value(Release, Releases), []),
+  {next_state, deployment, State#state{ deployments = [{Release, [Group|Groups]}|Deployments] }};
+deployment({transfer_completed, Group}, #state{ deployments = [{Release, Groups}|Deployments] } = State) ->
+  ?INFO("Transfer to all hosts in group '~s' has been completed", [Group]),
   gen_fsm:send_event(self(), run),
-  {next_state, deployment, State#state{ deployments = [{Release, Groups}|Deployments] }}.
+  {next_state, deployment, State#state{ deployments = [{Release, Groups -- [Group]}|Deployments] }}.
 
 %%--------------------------------------------------------------------
 %% @private

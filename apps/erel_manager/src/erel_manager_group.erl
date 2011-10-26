@@ -18,9 +18,9 @@ handle_message(_Message, #state{} = State) ->
 handle_cast(_, State) ->
   {noreply, State}.
 
-handle_call({transfer, Path, Attributes}, From, #state{ group = Group, endpoint = Endpoint } = State) ->
+handle_call({transfer, Id, Path, Attributes}, From, #state{ group = Group, endpoint = Endpoint } = State) ->
   ?DBG("Transfering ~s to group '~s'", [Path, Group]),
-  spawn_link(fun () -> transfer(From, Endpoint, Group, Path, Attributes) end),
+  spawn_link(fun () -> transfer(From, Endpoint, Id, Group, Path, Attributes) end),
   {noreply, State};
 
 handle_call(_, _, State) ->
@@ -32,7 +32,7 @@ group_topic(Group) ->
   "erel.group." ++ Group.
 
 -define(CHUNK_SIZE, (128*1024)).
-transfer(From, Endpoint, Group, Path, Attributes) ->
+transfer(From, Endpoint, Id, Group, Path, Attributes) ->
   ?DBG("Creating zip file"),
   {ok, Zip} = create_zip(Path),
   Crc = erlang:crc32(Zip),
@@ -40,14 +40,14 @@ transfer(From, Endpoint, Group, Path, Attributes) ->
   Chunks = Size div ?CHUNK_SIZE,
   Remainder = Size rem ?CHUNK_SIZE,
   ?DBG("Sending ~p chunks of the file with crc32 ~p (total size ~p)", [Chunks + 1, Crc, Size]),
-  erel_endp:cast(Endpoint, erel, group_topic(Group), {transfer, Attributes, Crc, Chunks + 1}),
+  erel_endp:cast(Endpoint, erel, group_topic(Group), {transfer, Id, Attributes, Crc, Chunks + 1}),
   lists:foldl(fun(Chunk, Offset) -> 
         Part = binary:part(Zip, Offset, ?CHUNK_SIZE),
-        erel_endp:cast(Endpoint, erel, group_topic(Group), {chunk, Crc, Chunk, Chunks + 1, ?CHUNK_SIZE, Part}),
+        erel_endp:cast(Endpoint, erel, group_topic(Group), {chunk, Id, Crc, Chunk, Chunks + 1, ?CHUNK_SIZE, Part}),
         Offset + ?CHUNK_SIZE
     end, 0, lists:seq(1, Chunks)),
   Part = binary:part(Zip, Size - Remainder, Remainder),
-  erel_endp:cast(Endpoint, erel, group_topic(Group), {chunk, Crc, Chunks + 1, Chunks + 1, Remainder, Part}),
+  erel_endp:cast(Endpoint, erel, group_topic(Group), {chunk, Id, Crc, Chunks + 1, Chunks + 1, Remainder, Part}),
   gen_server:reply(From, ok).
 
 create_zip(Path) ->

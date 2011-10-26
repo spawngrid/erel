@@ -5,7 +5,7 @@
 -include_lib("erel_manager/include/erel_manager.hrl").
 
 -record(state, { endpoint :: pid(),  expected = [] :: list(string()), cb :: fun(() -> any()),
-                 reply :: term()  }).
+        reply :: term(), req :: none | term()  }).
 
 start(Topic, Hosts, Fun) ->
   start(ping, pong, Topic, Hosts, Fun).
@@ -24,14 +24,14 @@ binding({_Req, _Reply, Topic, _Expected, _Fun}) ->
 
 init(Endpoint, {Req, Reply, Topic, Expected, Fun}) ->
   Req =/= none andalso erel_endp:cast(Endpoint, erel, Topic, Req),
-  {ok, #state{ endpoint = Endpoint, expected = Expected, cb = Fun, reply = Reply }}.
+  {ok, #state{ endpoint = Endpoint, expected = Expected, cb = Fun, reply = Reply, req = Req }}.
 
-handle_message({announce, Hostname}, #state{ reply = Reply } = State) ->
+handle_message({announce, Hostname}, #state{ reply = Reply, req = ping } = State) ->
   handle_message({Reply, Hostname}, State);
 
 handle_message({Reply, Hostname}, #state{ expected = Expected, cb = Cb, reply = Reply } = State) ->
   Expected1 = Expected -- [Hostname],
-  ?INFO("Host ~s is alive, left to join: ~p",[Hostname, Expected1]),
+  ?INFO("Host ~s has responded with ~p, left to respond: ~p",[Hostname, Reply, Expected1]),
   case Expected1 of 
     [] ->
       ?INFO("Quorum has been reached"), 

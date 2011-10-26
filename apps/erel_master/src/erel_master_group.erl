@@ -24,34 +24,34 @@ handle_message({announce, Hostname}, #state{ hostname = Hostname } = State) -> %
 handle_message({announce, Hostname}, #state{} = State) -> %% some other host's announce message, ignore
   {ok, State};
 
-handle_message({transfer, Attributes, Crc, Chunks}, #state{} = State) ->
-  ?DBG("New transfer with crc32 of ~p", [Crc]),
+handle_message({transfer, Id, Attributes, Crc, Chunks}, #state{} = State) ->
+  ?DBG("New transfer with id ~p and crc32 of ~p", [Id, Crc]),
   case supervisor:start_child(erel_master_file_receiver_sup, 
-    esupervisor:spec(#worker{ id = Crc, modules = [erel_master_file_receiver],
-      start_func = { erel_master_file_receiver, start_link, [self(), Crc, Chunks] }, 
+    esupervisor:spec(#worker{ id = Id, modules = [erel_master_file_receiver],
+      start_func = { erel_master_file_receiver, start_link, [self(), Id, Crc, Chunks] }, 
       restart = transient })) of 
     {ok, Pid} ->
-       ?DBG("Started file receiver for crc32 of ~p, pid ~p", [Crc, Pid]);
+       ?DBG("Started file receiver for id ~p, crc32 of ~p, pid ~p", [Id, Crc, Pid]);
     {error, already_present} -> %% stale name to be removed
-      supervisor:delete_child(erel_master_file_receiver_sup, Crc),
-      handle_message({transfer, Attributes, Crc, Chunks}, State);
+      supervisor:delete_child(erel_master_file_receiver_sup, Id),
+      handle_message({transfer, Id, Attributes, Crc, Chunks}, State);
     {error, {already_started, Pid}} ->
-       ?DBG("File receiver for crc32 of ~p was already started, pid ~p",[Crc, Pid])
+       ?DBG("File receiver for id ~p, crc32 of ~p was already started, pid ~p",[Id, Crc, Pid])
    end,
   {ok, State}; 
 
-handle_message({chunk, Crc, Chunk, Chunks, ChunkSize, Part}=Msg, #state{} = State) ->
+handle_message({chunk, Id, Crc, Chunk, Chunks, ChunkSize, Part}=Msg, #state{} = State) ->
   Receivers = supervisor:which_children(erel_master_file_receiver_sup),
-  case lists:keyfind(Crc, 1, Receivers) of 
+  case lists:keyfind(Id, 1, Receivers) of 
     false -> %% missing receiver
       {ok, Pid} = supervisor:start_child(erel_master_file_receiver_sup, 
-        esupervisor:spec(#worker{ id = Crc, modules = [erel_master_file_receiver],
-            start_func = { erel_master_file_receiver, start_link, [self(), Crc, Chunks] }, 
+        esupervisor:spec(#worker{ id = Id, modules = [erel_master_file_receiver],
+            start_func = { erel_master_file_receiver, start_link, [self(), Id, Crc, Chunks] }, 
       restart = transient })),
-     ?DBG("Started file receiver for crc32 of ~p, pid ~p", [Crc, Pid]),
+     ?DBG("Started file receiver for id ~p, crc32 of ~p, pid ~p", [Id, Crc, Pid]),
      gen_server:cast(Pid, Msg);
     {_, undefined, _, _} -> %% stale spec
-       supervisor:delete_child(erel_master_file_receiver_sup, Crc),
+       supervisor:delete_child(erel_master_file_receiver_sup, Id),
        handle_message(Msg, State);
     {_, Pid, _, _} -> %% found it
       gen_server:cast(Pid, Msg)
@@ -62,8 +62,10 @@ handle_message(Message, #state{ group = Group } = State) ->
   ?WARNING("Unexpected message received in the group '~s': ~p",[Group, Message]),
   {ok, State}.
 
-handle_cast({received, Crc, Filename}, #state{} = State) ->
+handle_cast({received, Id, Crc, Filename}, #state{ endpoint = Endpoint, topic = Topic,
+                                                   hostname = Hostname } = State) ->
   ?DBG("File with crc32 of ~p has been fully received and saved to ~s", [Crc, Filename]),
+  erel_endp:cast(Endpoint, erel, Topic, {{received, Id}, Hostname}), 
   {noreply, State};
 
 handle_cast(_, State) ->

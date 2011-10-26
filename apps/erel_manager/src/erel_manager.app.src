@@ -9,6 +9,7 @@
                   sasl,
                   alog,
                   erel_common,
+                  ossp_uuid,
                   gen_bunny
                  ]},
   {mod, { erel_manager_app, []}},
