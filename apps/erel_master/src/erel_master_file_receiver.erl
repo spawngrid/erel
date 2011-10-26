@@ -190,7 +190,7 @@ write_chunk(Crc, Binary) ->
       {ok, Dir} = file:get_cwd()
   end,
   filelib:ensure_dir(filename:join([Dir, "files", CrcS]) ++ "/"),
-  {ok, File} = file:open(filename:join([Dir, files, CrcS,"file.zip"]), [append, binary]),
+  {ok, File} = file:open(filename:join([Dir, "files", CrcS,"file.zip"]), [append, binary]),
   ok = file:write(File, Binary),
   file:close(File),
   ok.
