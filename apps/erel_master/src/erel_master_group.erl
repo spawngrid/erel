@@ -24,8 +24,8 @@ handle_message({announce, Hostname}, #state{ hostname = Hostname } = State) -> %
 handle_message({announce, Hostname}, #state{} = State) -> %% some other host's announce message, ignore
   {ok, State};
 
-handle_message({deploy, Attributes, Crc, Chunks}, #state{} = State) ->
-  ?DBG("New deployment with crc32 of ~p", [Crc]),
+handle_message({transfer, Attributes, Crc, Chunks}, #state{} = State) ->
+  ?DBG("New transfer with crc32 of ~p", [Crc]),
   case supervisor:start_child(erel_master_file_receiver_sup, 
     esupervisor:spec(#worker{ id = Crc, modules = [erel_master_file_receiver],
       start_func = { erel_master_file_receiver, start_link, [self(), Crc, Chunks] }, 
@@ -34,7 +34,7 @@ handle_message({deploy, Attributes, Crc, Chunks}, #state{} = State) ->
        ?DBG("Started file receiver for crc32 of ~p, pid ~p", [Crc, Pid]);
     {error, already_present} -> %% stale name to be removed
       supervisor:delete_child(erel_master_file_receiver_sup, Crc),
-      handle_message({deploy, Attributes, Crc, Chunks}, State);
+      handle_message({transfer, Attributes, Crc, Chunks}, State);
     {error, {already_started, Pid}} ->
        ?DBG("File receiver for crc32 of ~p was already started, pid ~p",[Crc, Pid])
    end,

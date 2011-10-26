@@ -37,7 +37,7 @@ interpret({release, Name, Path}, Props) ->
   [{{release, Name}, Path}|Props];
 interpret({deploy, Name, Groups}, Props) ->
   Path = proplists:get_value({release, Name}, Props),
-  Fun = fun () -> [ erel_manager:group_deploy(Group, Path, []) || Group <- Groups ] end,
+  Fun = fun () -> [ erel_manager:group_transfer(Group, Path, []) || Group <- Groups ] end,
   Commands = proplists:get_value(commands, Props, []),
   [{commands, [Fun|Commands]}|Props];
 interpret(_, Props) ->

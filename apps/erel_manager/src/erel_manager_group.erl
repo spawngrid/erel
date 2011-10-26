@@ -18,9 +18,9 @@ handle_message(_Message, #state{} = State) ->
 handle_cast(_, State) ->
   {noreply, State}.
 
-handle_call({deploy, Path, Attributes}, From, #state{ group = Group, endpoint = Endpoint } = State) ->
-  ?DBG("Deploying ~s to group '~s'", [Path, Group]),
-  spawn_link(fun () -> deploy(From, Endpoint, Group, Path, Attributes) end),
+handle_call({transfer, Path, Attributes}, From, #state{ group = Group, endpoint = Endpoint } = State) ->
+  ?DBG("Transfering ~s to group '~s'", [Path, Group]),
+  spawn_link(fun () -> transfer(From, Endpoint, Group, Path, Attributes) end),
   {noreply, State};
 
 handle_call(_, _, State) ->
@@ -32,7 +32,7 @@ group_topic(Group) ->
   "erel.group." ++ Group.
 
 -define(CHUNK_SIZE, (128*1024)).
-deploy(From, Endpoint, Group, Path, Attributes) ->
+transfer(From, Endpoint, Group, Path, Attributes) ->
   ?DBG("Creating zip file"),
   {ok, Zip} = create_zip(Path),
   Crc = erlang:crc32(Zip),
@@ -40,7 +40,7 @@ deploy(From, Endpoint, Group, Path, Attributes) ->
   Chunks = Size div ?CHUNK_SIZE,
   Remainder = Size rem ?CHUNK_SIZE,
   ?DBG("Sending ~p chunks of the file with crc32 ~p (total size ~p)", [Chunks + 1, Crc, Size]),
-  erel_endp:cast(Endpoint, erel, group_topic(Group), {deploy, Attributes, Crc, Chunks + 1}),
+  erel_endp:cast(Endpoint, erel, group_topic(Group), {transfer, Attributes, Crc, Chunks + 1}),
   lists:foldl(fun(Chunk, Offset) -> 
         Part = binary:part(Zip, Offset, ?CHUNK_SIZE),
         erel_endp:cast(Endpoint, erel, group_topic(Group), {chunk, Crc, Chunk, Chunks + 1, ?CHUNK_SIZE, Part}),
