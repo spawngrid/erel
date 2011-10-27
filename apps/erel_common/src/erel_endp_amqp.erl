@@ -26,7 +26,7 @@ start_link(Handler, Arg) ->
   ConnectInfo = {network, Host, Port, {list_to_binary(Username), list_to_binary(Password)}, list_to_binary(VHost)},
   Declare = binding_to_declare(Handler:binding(Arg)),
 
-  gen_server:start_link({local, Handler}, gen_bunny, [?MODULE, ConnectInfo,
+  gen_server:start_link(gen_bunny, [?MODULE, ConnectInfo,
       Declare, [Handler, Arg]], []). 
 
 init([Handler, Arg]) ->

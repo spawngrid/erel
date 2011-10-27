@@ -101,12 +101,12 @@ ready(run, #state{ deployments = [_|_] } = State) -> % schedule a deployment
 
 group_join(run, #state{ groups = [{_Group, Hosts}|_] } = State) -> % join host to a group
   Self = self(),
-  Fun = fun () -> gen_fsm:send_event(Self, group_quorum_reached) end,
+  Fun = fun (_) -> gen_fsm:send_event(Self, group_quorum_reached) end,
   erel_manager_quorum:start("erel.host", Hosts, Fun),
   {next_state, group_join, State};
 group_join(group_quorum_reached, #state{ groups = [{Group, Hosts}|_] } = State) ->
   Self = self(),
-  Fun = fun () -> gen_fsm:send_event(Self, group_joined) end,
+  Fun = fun (_) -> gen_fsm:send_event(Self, group_joined) end,
   ?INFO("Quorum for group '~s' has been reached", [Group]),
   erel_manager_quorum:stop("erel.host", Hosts),
   erel_manager_quorum:start("erel.group." ++ Group, Hosts, Fun),
@@ -122,17 +122,36 @@ deployment(run, #state{ deployments = [{_Release, []}|Deployments] } = State) ->
   gen_fsm:send_event(self(), run),
   {next_state, ready, State#state{ deployments = Deployments }};
 deployment(run, #state{ deployments = [{Release, [Group|Groups]}|Deployments], 
-                        joined_groups = JoinedGroups, releases = Releases } = State) -> % deploy
+                        joined_groups = JoinedGroups } = State) -> % check releases 
+  Self = self(),
+  Fun = fun (Releases) -> gen_fsm:send_event(Self, {releases, Releases}) end,
+  erel_manager_quorum:start(list_releases, list_releases, "erel.group." ++ Group, proplists:get_value(Group, JoinedGroups), Fun),
+  {next_state, deployment, State};
+deployment({releases, Listed}, #state{ releases = Releases, deployments = [{RelName, [Group|Groups]}|_] } = State) ->
+  %% find out which hosts need the release
+  {_, RelVer, _} = lists:keyfind(RelName, 1, Releases),
+  Hosts = lists:map(fun({Host, _}) -> Host end, lists:filter(fun({_, Rels}) -> not lists:member({RelName, RelVer}, Rels) end, Listed)),
+  Self = self(),
+  SubGroup = Group ++ "." ++ RelName ++ "-" ++ RelVer,
+  ?INFO("Inviting ~p to the deployment group '~s'", [Hosts, SubGroup]),
+  Fun = fun (_) -> gen_fsm:send_event(Self, {deployment_group_joined, SubGroup, Hosts}) end,
+  erel_manager_quorum:start("erel.group." ++ SubGroup, Hosts, Fun),
+  [ erel_manager:group_join(SubGroup, Host) || Host <- Hosts ],
+  {next_state, deployment, State};
+deployment({deployment_group_joined, SubGroup, Hosts}, #state{ releases = Releases, deployments = [{Release, _}|_] } = State) ->
+  erel_manager_quorum:stop("erel.group." ++ SubGroup, Hosts),
+  ?INFO("Deployment group '~s' has been joined by all required nodes", [SubGroup]),
   Self = self(),
   Id = ossp_uuid:make(v4, text),
-  Fun = fun () -> gen_fsm:send_event(Self, {transfer_completed, Group}) end,
-  erel_manager_quorum:start(none, {received, Id}, "erel.group." ++ Group, proplists:get_value(Group, JoinedGroups), Fun),
-  erel_manager:group_transfer(Id, Group, proplists:get_value(Release, Releases), []),
-  {next_state, deployment, State#state{ deployments = [{Release, [Group|Groups]}|Deployments] }};
-deployment({transfer_completed, Group}, #state{ deployments = [{Release, Groups}|Deployments] } = State) ->
+  Fun = fun (_) -> gen_fsm:send_event(Self, {transfer_completed, SubGroup}) end,
+  erel_manager_quorum:start(none, {received, Id}, "erel.group." ++ SubGroup, Hosts, Fun),
+  {_, _, Path} = lists:keyfind(Release, 1, Releases),
+  erel_manager:group_transfer(Id, SubGroup, Path,[]),
+  {next_state, deployment, State};
+deployment({transfer_completed, Group}, #state{ deployments = [{Release, [_|Groups]}|Deployments] } = State) ->
   ?INFO("Transfer to all hosts in group '~s' has been completed", [Group]),
   gen_fsm:send_event(self(), run),
-  {next_state, deployment, State#state{ deployments = [{Release, Groups -- [Group]}|Deployments] }}.
+  {next_state, deployment, State#state{ deployments = [{Release, Groups}|Deployments] }}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -260,7 +279,7 @@ interpret({release, Name, Path}, #state{ releases = Releases } = State) ->
       State; %% should we return state here or make fsm stop?
     {release, Name, Version, _, _, _} ->
       ?INFO("Release '~s' has been located, version ~s", [Name, Version]),
-      State#state{ releases = [{{Name, Version}, Path}|Releases]}
+      State#state{ releases = [{Name, Version, RealPath}|Releases]}
   end.
 
 

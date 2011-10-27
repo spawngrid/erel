@@ -5,7 +5,7 @@
 -include_lib("erel_manager/include/erel_manager.hrl").
 
 -record(state, { endpoint :: pid(),  expected = [] :: list(string()), cb :: fun(() -> any()),
-        reply :: term(), req :: none | term()  }).
+        reply :: term(), req :: none | term(), payloads = [] :: list({string(), term()})  }).
 
 start(Topic, Hosts, Fun) ->
   start(ping, pong, Topic, Hosts, Fun).
@@ -29,16 +29,19 @@ init(Endpoint, {Req, Reply, Topic, Expected, Fun}) ->
 handle_message({announce, Hostname}, #state{ reply = Reply, req = ping } = State) ->
   handle_message({Reply, Hostname}, State);
 
-handle_message({Reply, Hostname}, #state{ expected = Expected, cb = Cb, reply = Reply } = State) ->
+handle_message({Reply, Hostname}, #state{ reply = Reply } = State) ->
+  handle_message({Reply, undefined, Hostname}, State);
+
+handle_message({Reply, Payload, Hostname}, #state{ expected = Expected, cb = Cb, reply = Reply, payloads = Payloads } = State) ->
   Expected1 = Expected -- [Hostname],
-  ?INFO("Host ~s has responded with ~p, left to respond: ~p",[Hostname, Reply, Expected1]),
+  ?DBG("Host ~s has responded with ~p(~p), left to respond: ~p",[Hostname, Reply, Payload, Expected1]),
   case Expected1 of 
     [] ->
-      ?INFO("Quorum has been reached"), 
-      spawn(Cb),
+      ?DBG("Quorum has been reached"), 
+      spawn(fun () -> Cb([{Hostname, Payload}|Payloads]) end),
       {ok, State#state{ expected = Expected1, cb = fun() -> ok end }};
     _ ->
-      {ok, State#state{ expected = Expected1 }}
+      {ok, State#state{ expected = Expected1, payloads = [{Hostname, Payload}|Payloads] }}
   end;
 
 handle_message(_, #state{} = State) ->

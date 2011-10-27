@@ -58,6 +58,10 @@ handle_message({chunk, Id, Crc, Chunk, Chunks, ChunkSize, Part}=Msg, #state{} = 
   end,
   {ok, State};
 
+handle_message(list_releases, #state{ endpoint = Endpoint, topic = Topic, hostname = Hostname } = State) ->
+  erel_endp:cast(Endpoint, erel, Topic, {list_releases, [], Hostname}),
+  {ok, State};
+
 handle_message(Message, #state{ group = Group } = State) ->
   {ok, State}.
 

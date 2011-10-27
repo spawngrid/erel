@@ -4,7 +4,9 @@
 -include_lib("erel_manager/include/erel_manager.hrl").
 
 group_join(Group, Hostname) ->
-  gen_server:call(erel_manager_host, {join, Hostname, Group}).
+  Children = supervisor:which_children(erel_manager_sup), 
+  {_, Pid, _, _} = lists:keyfind(erel_manager_host, 1, Children),
+  gen_server:call(Pid, {join, Hostname, Group}).
 
 group_transfer(Id, Group, Path, Attributes) ->
   Groups = supervisor:which_children(erel_manager_group_sup),
