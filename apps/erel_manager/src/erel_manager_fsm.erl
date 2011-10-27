@@ -99,9 +99,10 @@ ready(run, #state{ deployments = [_|_] } = State) -> % schedule a deployment
   gen_fsm:send_event(self(), run),
   {next_state, deployment, State}.
 
-group_join(run, #state{ groups = [{_Group, Hosts}|_] } = State) -> % join host to a group
+group_join(run, #state{ groups = [{Group, Hosts}|_] } = State) -> % join host to a group
   Self = self(),
   Fun = fun (_) -> gen_fsm:send_event(Self, group_quorum_reached) end,
+  ?INFO("Waiting for hosts ~p to join the group '~s'",[Hosts, Group]),
   erel_manager_quorum:start("erel.host", Hosts, Fun),
   {next_state, group_join, State};
 group_join(group_quorum_reached, #state{ groups = [{Group, Hosts}|_] } = State) ->
