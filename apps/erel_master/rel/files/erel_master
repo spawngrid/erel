@@ -1,0 +1,5 @@
+#! /bin/sh
+
+HERE=`dirname $0`
+
+$HERE/erl -mode embedded -config $HERE/../releases/{{rel_vsn}}/sys -boot $HERE/../releases/{{rel_vsn}}/erel_master -noshell $*

@@ -2,4 +2,4 @@
 
 HERE=`dirname $0`
 
-$HERE/erl -mode embedded -config $HERE/../releases/{{rel_vsn}}/sys -boot $HERE/../releases/{{rel_vsn}}/erel_manager  -s erel_manager_main -erel_manager config \"$1\"
+$HERE/erl -mode embedded -config $HERE/../releases/{{rel_vsn}}/sys -boot $HERE/../releases/{{rel_vsn}}/erel_manager -noshell -s erel_manager_main -erel_manager config \"$1\"
