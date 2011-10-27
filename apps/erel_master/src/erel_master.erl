@@ -17,4 +17,4 @@ directory() ->
     _ ->
       {ok, Dir} = file:get_cwd()
   end,
-  Dir. 
+  filename:absname(Dir). 
