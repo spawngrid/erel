@@ -1,5 +1,11 @@
 #! /bin/sh
 
-HERE=`dirname $0`
-
-$HERE/erl -mode embedded -config $HERE/../releases/{{rel_vsn}}/sys -boot $HERE/../releases/{{rel_vsn}}/erel_manager -noshell -s erel_manager_main -erel_manager config \"$1\"
+HERE=$(cd ${0%/*} && pwd)
+ROOTDIR=${HERE%/*}
+EMU=beam
+BINDIR=$ROOTDIR/{{erts_vsn}}/bin
+cd $ROOTDIR
+export ROOTDIR
+export EMU
+export BINDIR
+exec $BINDIR/erlexec -mode embedded -config $ROOTDIR/releases/{{rel_vsn}}/sys -boot $ROOTDIR/releases/{{rel_vsn}}/erel_manager -noshell -s erel_manager_main -erel_manager config \"$1\"
