@@ -3,7 +3,8 @@
 
 -include_lib("erel_master/include/erel_master.hrl").
 
--record(state, { endpoint :: pid(), hostname :: string(), group :: string(), topic :: string() }).
+-record(state, { endpoint :: pid(), hostname :: string(), group :: string(), topic :: string(),
+                 received :: list({term(), string()}) }).
 
 binding(Group) ->
   #endp_binding{ name = erel, type = topic, topic = group_topic(Group) }.
@@ -62,14 +63,20 @@ handle_message(list_releases, #state{ endpoint = Endpoint, topic = Topic, hostna
   erel_endp:cast(Endpoint, erel, Topic, {list_releases, [], Hostname}),
   {ok, State};
 
+handle_message({provision_release, Release}, #state{ endpoint = Endpoint, topic = Topic, hostname = Hostname, received = Received } = State) ->
+  Path = proplists:get_value(Release, Received),
+  erel_master_releases:provision(Release, Path),
+  erel_endp:cast(Endpoint, erel, Topic, {{provision_release, Release}, Hostname}),
+  {ok, State};
+
 handle_message(Message, #state{ group = Group } = State) ->
   {ok, State}.
 
 handle_cast({received, Id, Crc, Filename}, #state{ endpoint = Endpoint, topic = Topic,
-                                                   hostname = Hostname } = State) ->
+                                                   received = Received, hostname = Hostname } = State) ->
   ?DBG("File with crc32 of ~p has been fully received and saved to ~s", [Crc, Filename]),
   erel_endp:cast(Endpoint, erel, Topic, {{received, Id}, Hostname}), 
-  {noreply, State};
+  {noreply, State#state{ received = [{Id, Filename}|Received] }};
 
 handle_cast(_, State) ->
   {noreply, State}.

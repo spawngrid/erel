@@ -142,15 +142,24 @@ deployment({deployment_group_joined, SubGroup, Hosts}, #state{ releases = Releas
   erel_manager_quorum:stop("erel.group." ++ SubGroup, Hosts),
   ?INFO("Deployment group '~s' has been joined by all required nodes", [SubGroup]),
   Self = self(),
-  Fun = fun (_) -> gen_fsm:send_event(Self, {transfer_completed, SubGroup}) end,
+  Fun = fun (_) -> gen_fsm:send_event(Self, {transfer_completed, SubGroup, Hosts}) end,
   erel_manager_quorum:start(none, {received, Release}, "erel.group." ++ SubGroup, Hosts, Fun),
   {_, _, Path} = lists:keyfind(Release, 1, Releases),
   erel_manager:group_transfer(Release, SubGroup, Path,[]),
   {next_state, deployment, State};
-deployment({transfer_completed, Group}, #state{ deployments = [{Release, [_|Groups]}|Deployments] } = State) ->
+deployment({transfer_completed, Group, Hosts}, #state{ deployments = [{Release, [_|Groups]}|_Deployments] } = State) ->
+  erel_manager_quorum:stop("erel.group." ++ Group, Hosts),
   ?INFO("Transfer to all hosts in group '~s' has been completed", [Group]),
+  Self = self(),
+  Fun = fun (_) -> gen_fsm:send_event(Self, {provisioning_completed, Group, Hosts}) end,
+  erel_manager_quorum:start({provision_release, Release}, {provision_release, Release}, "erel.group." ++ Group, Hosts, Fun), 
+  {next_state, deployment, State#state{}};
+deployment({provisioning_completed, Group, Hosts}, #state{ deployments = [{Release, [_|Groups]}|Deployments]} =State) ->
+  erel_manager_quorum:stop("erel.group." ++ Group, Hosts),
+  ?INFO("Provisioning on all hosts in group '~s' has been completed", [Group]),
   gen_fsm:send_event(self(), run),
   {next_state, deployment, State#state{ deployments = [{Release, Groups}|Deployments] }}.
+
 
 %%--------------------------------------------------------------------
 %% @private
