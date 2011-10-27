@@ -32,11 +32,18 @@ releases() ->
 
 inject_erel(ErelDir, RelDir) ->
   {ok, [Releases]} = file:consult(filename:join([ErelDir, "releases", "RELEASES"])),
-  {release, "erel", Vsn, _Erts, Deps, permanent} = hd(lists:filter(fun ({release, "erel", _Version, _Erts, _Deps, permanent}) -> true; (_) -> false end, Releases)),
+  Rel = {release, "erel", Vsn, _Erts, Deps, permanent} = hd(lists:filter(fun ({release, "erel", _Version, _Erts, _Deps, permanent}) -> true; (_) -> false end, Releases)),
   ErelRelDir = filename:join([ErelDir, "releases", Vsn]),
   [ copy_dep(ErelDir, RelDir, Name, Version) || {Name, Version, _Path} <- Deps ],
   filelib:ensure_dir(filename:join([RelDir, "releases", Vsn]) ++ "/"),
   [ file:copy(filename:join([ErelRelDir, File]), filename:join([RelDir, "releases", Vsn, File])) || File <- ["erel.boot","erel.rel","erel.script"] ],
+  %% inject our own portion of RELEASES
+  TargetRELEASES = filename:join([RelDir, "releases", "RELEASES"]),
+  {ok, [Rels]} = file:consult(TargetRELEASES),
+  Combined = Rels ++ [Rel],
+  {ok, F} = file:open(TargetRELEASES, [write]),
+  io:format(F, "~p. ", [Combined]),
+  file:close(F),
   ok.
 
 
