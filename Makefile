@@ -8,4 +8,4 @@ release: compile
 
 example: release
 	@rm -rf example/rel/example
-	@cd example && rebar generate
+	@cd example && rebar compile && rebar generate
