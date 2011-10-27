@@ -4,7 +4,7 @@
 
 %% API
 -export([start_link/0]).
--export([provision/2]).
+-export([provision/2, releases/0]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -16,7 +16,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {}).
+-record(state, { erels = [] :: list({string(), atom()})}).
 
 %%%===================================================================
 %%% API
@@ -34,6 +34,9 @@ start_link() ->
 
 provision(Release, Path) ->
   gen_server:call(?SERVER, {provision, Release, Path}).
+
+releases() ->
+  gen_server:call(?SERVER, releases).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -67,7 +70,7 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({provision, Release, Path}, From, State) ->
+handle_call({provision, Release, Path}, From, #state{ erels = Erels } = State) ->
   Dir = filename:join([erel_master:directory(), "releases", Release]),
   filelib:ensure_dir(Dir ++ "/"),
   ok = erl_tar:extract(Path, [{cwd, Dir}]),
@@ -83,7 +86,11 @@ handle_call({provision, Release, Path}, From, State) ->
   Port = open_port({spawn_executable, Erl},[{args, ["-detached","-boot", Boot, "-name", NodeName, "-eval", "\"erlang:set_cookie(" ++ atom_to_list(node()) ++ ",'" ++ atom_to_list(Cookie) ++"').\""]}]),
   port_connect(Port, whereis(application_controller)),
   unlink(Port),
-  {reply, ok, State}.
+  {reply, ok, State#state{ erels = [{Release, list_to_atom(NodeName)}|Erels] }};
+
+handle_call(releases, _From, #state{ erels = Erels } = State) ->
+  Reply = lists:flatten([ gen_server:call({erel_release_manager, Node}, releases) || {_, Node} <- Erels ]),
+  {reply, Reply, State}.
 
 %%--------------------------------------------------------------------
 %% @private

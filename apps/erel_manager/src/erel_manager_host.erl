@@ -28,4 +28,9 @@ handle_call({join, Hostname, Group}, _From, #state{ endpoint = Endpoint } = Stat
   end,
   ?DBG("Broadcasting request for host '~s' to join group '~s'", [Hostname, Group]),
   erel_endp:cast(Endpoint, erel, "erel.host", {join, Hostname, Group}),
+  {reply, ok, State};
+
+handle_call({part, Hostname, Group}, _From, #state{ endpoint = Endpoint } = State) ->
+  ?DBG("Broadcasting request for host '~s' to part group '~s'", [Hostname, Group]),
+  erel_endp:cast(Endpoint, erel, "erel.host", {part, Hostname, Group}),
   {reply, ok, State}.

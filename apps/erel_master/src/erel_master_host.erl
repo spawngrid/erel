@@ -35,6 +35,25 @@ handle_message({join, Hostname, Group}, #state{} = State) ->
   ?INFO("Group join request received for the group '~s' for the other host '~s', ignoring", [Group, Hostname]),
   {ok, State};
 
+handle_message({part, Hostname, Group}, #state{ hostname = Hostname, endpoint = Endpoint } = State) ->
+  ?INFO("Group leave request received, group name '~s'", [Group]),
+  Groups = supervisor:which_children(erel_master_group_sup),
+  case lists:keyfind(Group, 1, Groups) of
+    false -> %% this master hasn't joined the group
+      ?DBG("This host is not a part of group '~s' anyway", [Group]);
+    {_, Pid, _, _} -> 
+      supervisor:terminate_child(erel_master_group_sup, Group),
+      supervisor:delete_child(erel_master_group_sup, Group),
+      erel_endp:cast(Endpoint, erel, "erel.group." ++ Group, {leave, Hostname}),
+      ?DBG("Finished group handler for the group '~s', pid ~p", [Group, Pid])
+  end,
+  {ok, State};
+
+handle_message({part, Hostname, Group}, #state{} = State) ->
+  ?INFO("Group leave request received for the group '~s' for the other host '~s', ignoring", [Group, Hostname]),
+  {ok, State};
+
+
 handle_message({announce, Hostname}, #state{} = State) ->
   ?INFO("Host '~s' joined", [Hostname]),
   {ok, State};

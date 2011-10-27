@@ -23,6 +23,7 @@ binding({_Req, _Reply, Topic, _Expected, _Fun}) ->
   #endp_binding{ name = erel, type = topic, topic = Topic }.
 
 init(Endpoint, {Req, Reply, Topic, Expected, Fun}) ->
+  length(Expected) == 0 andalso Fun(undefined),
   Req =/= none andalso erel_endp:cast(Endpoint, erel, Topic, Req),
   {ok, #state{ endpoint = Endpoint, expected = Expected, cb = Fun, reply = Reply, req = Req }}.
 
