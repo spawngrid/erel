@@ -5,8 +5,7 @@
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib,
-                  erel_common
+                  stdlib
                  ]},
   {mod, { example_app, []}},
   {env, []}
