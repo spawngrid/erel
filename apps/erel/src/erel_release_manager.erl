@@ -32,7 +32,7 @@ releases() ->
 
 inject_erel(ErelDir, RelDir) ->
   {ok, [Releases]} = file:consult(filename:join([ErelDir, "releases", "RELEASES"])),
-  Rel = {release, "erel", Vsn, _Erts, Deps, permanent} = hd(lists:filter(fun ({release, "erel", _Version, _Erts, _Deps, permanent}) -> true; (_) -> false end, Releases)),
+  Rel = {release, "erel", Vsn, _Erts, Deps, permanent} = lists:keyfind("erel", 2, Releases),
   ErelRelDir = filename:join([ErelDir, "releases", Vsn]),
   [ copy_dep(ErelDir, RelDir, Name, Version) || {Name, Version, _Path} <- Deps ],
   filelib:ensure_dir(filename:join([RelDir, "releases", Vsn]) ++ "/"),
