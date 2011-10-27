@@ -199,5 +199,5 @@ filename(Id) ->
     _ ->
       {ok, Dir} = file:get_cwd()
   end,
-  filename:absname(filename:join([Dir, "files", Id ++ ".zip"])).
+  filename:absname(filename:join([Dir, "files", Id])).
  
