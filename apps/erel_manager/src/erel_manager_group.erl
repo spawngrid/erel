@@ -33,23 +33,27 @@ group_topic(Group) ->
 
 -define(CHUNK_SIZE, (128*1024)).
 transfer(From, Endpoint, Id, Group, Path, Attributes) ->
-  ?DBG("Creating zip file"),
-  {ok, Zip} = create_zip(Path),
-  Crc = erlang:crc32(Zip),
-  Size = byte_size(Zip),
+  ?DBG("Creating tar file"),
+  {ok, Tar} = create_tar(Path),
+  Crc = erlang:crc32(Tar),
+  Size = byte_size(Tar),
   Chunks = Size div ?CHUNK_SIZE,
   Remainder = Size rem ?CHUNK_SIZE,
   ?DBG("Sending ~p chunks of the file with crc32 ~p (total size ~p)", [Chunks + 1, Crc, Size]),
   erel_endp:cast(Endpoint, erel, group_topic(Group), {transfer, Id, Attributes, Crc, Chunks + 1}),
   lists:foldl(fun(Chunk, Offset) -> 
-        Part = binary:part(Zip, Offset, ?CHUNK_SIZE),
+        Part = binary:part(Tar, Offset, ?CHUNK_SIZE),
         erel_endp:cast(Endpoint, erel, group_topic(Group), {chunk, Id, Crc, Chunk, Chunks + 1, ?CHUNK_SIZE, Part}),
         Offset + ?CHUNK_SIZE
     end, 0, lists:seq(1, Chunks)),
-  Part = binary:part(Zip, Size - Remainder, Remainder),
+  Part = binary:part(Tar, Size - Remainder, Remainder),
   erel_endp:cast(Endpoint, erel, group_topic(Group), {chunk, Id, Crc, Chunks + 1, Chunks + 1, Remainder, Part}),
   gen_server:reply(From, ok).
 
-create_zip(Path) ->
-    {ok, {_, Binary}} = zip:create("erel.zip", ["."], [memory, {compress, all}, {cwd, Path}]),
-    {ok, Binary}.
+create_tar(Path) ->
+  Files = filelib:fold_files(Path, ".*", true, fun(File, Acc) -> [{string:strip(File -- Path, left, $/), File}|Acc] end, []),
+  Tar = filename:join([filename:dirname(Path),filename:basename(Path) ++ ".tar"]),
+  ok = erl_tar:create(Tar, Files),
+  {ok, Binary} = file:read_file(Tar),
+  file:delete(Tar),
+  {ok, Binary}.

@@ -70,9 +70,9 @@ init([]) ->
 handle_call({provision, Release, Path}, From, State) ->
   Dir = filename:join([erel_master:directory(), "releases", Release]),
   filelib:ensure_dir(Dir ++ "/"),
-  {ok, _} = zip:extract(Path, [{cwd, Dir}]),
+  ok = erl_tar:extract(Path, [{cwd, Dir}]),
   file:delete(Path),
-  {reply, ok, State}.
+ {reply, ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
