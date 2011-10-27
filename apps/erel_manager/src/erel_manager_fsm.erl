@@ -142,11 +142,10 @@ deployment({deployment_group_joined, SubGroup, Hosts}, #state{ releases = Releas
   erel_manager_quorum:stop("erel.group." ++ SubGroup, Hosts),
   ?INFO("Deployment group '~s' has been joined by all required nodes", [SubGroup]),
   Self = self(),
-  Id = ossp_uuid:make(v4, text),
   Fun = fun (_) -> gen_fsm:send_event(Self, {transfer_completed, SubGroup}) end,
-  erel_manager_quorum:start(none, {received, Id}, "erel.group." ++ SubGroup, Hosts, Fun),
+  erel_manager_quorum:start(none, {received, Release}, "erel.group." ++ SubGroup, Hosts, Fun),
   {_, _, Path} = lists:keyfind(Release, 1, Releases),
-  erel_manager:group_transfer(Id, SubGroup, Path,[]),
+  erel_manager:group_transfer(Release, SubGroup, Path,[]),
   {next_state, deployment, State};
 deployment({transfer_completed, Group}, #state{ deployments = [{Release, [_|Groups]}|Deployments] } = State) ->
   ?INFO("Transfer to all hosts in group '~s' has been completed", [Group]),
