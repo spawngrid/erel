@@ -72,7 +72,18 @@ handle_call({provision, Release, Path}, From, State) ->
   filelib:ensure_dir(Dir ++ "/"),
   ok = erl_tar:extract(Path, [{cwd, Dir}]),
   file:delete(Path),
- {reply, ok, State}.
+  %% start erel
+  {ok, [Releases]} = file:consult(filename:join([Dir, "releases", "RELEASES"])),
+  Rel = {release, "erel", Version, _Erts, _Deps, permanent} = lists:keyfind("erel", 2, Releases),
+
+  Erl = filename:join([Dir, "bin", "erl"]),
+  Boot = filename:join([Dir, "releases", Version, "erel"]),
+  NodeName = binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ erel_net_manager:hostname(),
+  Cookie = erel_net_manager:cookie(list_to_atom(NodeName)),
+  Port = open_port({spawn_executable, Erl},[{args, ["-detached","-boot", Boot, "-name", NodeName, "-eval", "\"erlang:set_cookie(" ++ atom_to_list(node()) ++ ",'" ++ atom_to_list(Cookie) ++"').\""]}]),
+  port_connect(Port, whereis(application_controller)),
+  unlink(Port),
+  {reply, ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
