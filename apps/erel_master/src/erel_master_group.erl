@@ -66,6 +66,10 @@ handle_message(list_releases, #state{ endpoint = Endpoint, topic = Topic, hostna
 handle_message({provision_release, Release}, #state{ endpoint = Endpoint, topic = Topic, hostname = Hostname, received = Received } = State) ->
   Path = proplists:get_value(Release, Received),
   erel_master_releases:provision(Release, Path),
+  ?INFO("Release '~s' has been provisioned", [Release]),
+  erel_endp:cast(Endpoint, erel, Topic, {list_releases, [], Hostname}),
+  {ok, State};
+
   erel_endp:cast(Endpoint, erel, Topic, {{provision_release, Release}, Hostname}),
   {ok, State};
 
