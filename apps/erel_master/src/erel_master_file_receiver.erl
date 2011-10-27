@@ -193,11 +193,5 @@ write_chunk(Id, Binary) ->
 filename(Id) when is_binary(Id) ->
   filename(binary_to_list(Id));
 filename(Id) ->
-  case application:get_env(erel_master, dir) of
-    {ok, Dir} ->
-      ok;
-    _ ->
-      {ok, Dir} = file:get_cwd()
-  end,
-  filename:absname(filename:join([Dir, "files", Id])).
+  filename:absname(filename:join([erel_master:directory(), "files", Id])).
  
