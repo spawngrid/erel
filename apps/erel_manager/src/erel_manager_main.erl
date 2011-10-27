@@ -7,7 +7,8 @@ start() ->
   case application:get_env(erel_manager, config) of
     {ok, ConfigFile} ->
       {ok, Config} = file:consult(ConfigFile),
-      erel_manager_fsm:start_link(Config);
+      supervisor:start_child(erel_manager_sup, esupervisor:spec(#worker{ id = erel_manager_fsm,
+                                                   start_func = {erel_manager_fsm, start_link, [Config]}}));
     undefined ->
       io:format("You should specify -erel_manager config ConfigFile~n"),
       init:stop()

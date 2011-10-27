@@ -20,11 +20,15 @@
 
 -define(SERVER, ?MODULE).
 
+-type release_name() :: string().
+-type release_version() :: string().
+-type release() :: {release_name(), release_version()}.
+
 -record(state, { config :: list(term()), 
     groups = [] :: list({string(), list(string())}),
     joined_groups = [] :: list({string(), list(string())}),
-    releases = [] :: list({atom(), string()}),
-    deployments = [] :: list({atom(), list(string())}) }).
+    releases = [] :: list({release(), string()}),
+    deployments = [] :: list({release(), list(string())}) }).
 
 %%%===================================================================
 %%% API
@@ -246,7 +250,18 @@ interpret({group, Name, Hosts}, #state{ groups = Groups } = State) ->
 interpret({deploy, Name, Groups}, #state{ deployments = Deployments } = State) ->
   State#state{ deployments = [{Name, Groups}|Deployments]};
 interpret({release, Name, Path}, #state{ releases = Releases } = State) ->
-  State#state{ releases = [{Name, Path}|Releases]}.
+  %% figure out version
+  {ok, Config} = application:get_env(erel_manager, config),
+  RealPath = filename:join([filename:dirname(Config), Path]),
+  {ok, [Rels]} = file:consult(filename:join([RealPath, "releases", "RELEASES"])),
+  case lists:keyfind(Name, 2, Rels) of
+    false ->
+      ?ERROR("Release '~s' can't be found in ~s", [Name, filename:join([RealPath, "releases", "RELEASES"])]),
+      State; %% should we return state here or make fsm stop?
+    {release, Name, Version, _, _, _} ->
+      ?INFO("Release '~s' has been located, version ~s", [Name, Version]),
+      State#state{ releases = [{{Name, Version}, Path}|Releases]}
+  end.
 
 
 
