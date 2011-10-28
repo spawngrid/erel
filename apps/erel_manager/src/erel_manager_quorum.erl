@@ -4,8 +4,8 @@
 
 -include_lib("erel_manager/include/erel_manager.hrl").
 
--record(state, { endpoint :: pid(),  expected = [] :: list(string()), cb :: fun(() -> any()),
-        reply :: term(), req :: none | term(), payloads = [] :: list({string(), term()})  }).
+-record(state, { endpoint :: pid(),  topic = [] :: string(), hosts = [] :: list(string()), expected = [] :: list(string()), 
+        cb :: fun(() -> any()), reply :: term(), req :: none | term(), payloads = [] :: list({string(), term()})  }).
 
 start(Topic, Hosts, Fun) ->
   start(ping, pong, Topic, Hosts, Fun).
@@ -23,9 +23,11 @@ binding({_Req, _Reply, Topic, _Expected, _Fun}) ->
   #endp_binding{ name = erel, type = topic, topic = Topic }.
 
 init(Endpoint, {Req, Reply, Topic, Expected, Fun}) ->
-  length(Expected) == 0 andalso Fun(undefined),
+  length(Expected) == 0 andalso spawn(fun () -> stop(Topic, Expected),
+                Fun(undefined) end),
   Req =/= none andalso erel_endp:cast(Endpoint, erel, Topic, Req),
-  {ok, #state{ endpoint = Endpoint, expected = Expected, cb = Fun, reply = Reply, req = Req }}.
+  {ok, #state{ endpoint = Endpoint, expected = Expected, cb = Fun, reply =
+          Reply, req = Req, topic = Topic }}.
 
 handle_message({announce, Hostname}, #state{ reply = Reply, req = ping } = State) ->
   handle_message({Reply, Hostname}, State);
@@ -33,16 +35,18 @@ handle_message({announce, Hostname}, #state{ reply = Reply, req = ping } = State
 handle_message({Reply, Hostname}, #state{ reply = Reply } = State) ->
   handle_message({Reply, undefined, Hostname}, State);
 
-handle_message({Reply, Payload, Hostname}, #state{ expected = Expected, cb = Cb, reply = Reply, payloads = Payloads } = State) ->
-  Expected1 = Expected -- [Hostname],
-  ?DBG("Host ~s has responded with ~p(~p), left to respond: ~p",[Hostname, Reply, Payload, Expected1]),
-  case Expected1 of 
+handle_message({Reply, Payload, Hostname}, #state{ expected = Expected, cb =
+        Cb, reply = Reply, topic = Topic, hosts = Hosts, payloads = Payloads } = State) ->
+  Hosts1 = [Hostname|Hosts],
+  ?DBG("Host ~s has responded with ~p(~p), left to respond: ~p",[Hostname,
+          Reply, Payload, Expected -- Hosts1]),
+  case Expected -- Hosts1 of 
     [] ->
       ?DBG("Quorum has been reached"), 
-      spawn(fun () -> Cb([{Hostname, Payload}|Payloads]) end),
-      {ok, State#state{ expected = Expected1, cb = fun() -> ok end }};
+      spawn(fun () -> stop(Topic, Hosts1), Cb([{Hostname, Payload}|Payloads]) end),
+      {ok, State#state{ hosts = Hosts1, cb = fun() -> ok end }};
     _ ->
-      {ok, State#state{ expected = Expected1, payloads = [{Hostname, Payload}|Payloads] }}
+      {ok, State#state{ hosts = Hosts1, payloads = [{Hostname, Payload}|Payloads] }}
   end;
 
 handle_message(_, #state{} = State) ->

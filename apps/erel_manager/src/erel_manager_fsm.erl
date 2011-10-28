@@ -110,13 +110,11 @@ group_join(group_quorum_reached, #state{ groups = [{Group, Hosts}|_] } = State) 
   Self = self(),
   Fun = fun (_) -> gen_fsm:send_event(Self, group_joined) end,
   ?INFO("Quorum for group '~s' has been reached", [Group]),
-  erel_manager_quorum:stop("erel.host", Hosts),
   erel_manager_quorum:start("erel.group." ++ Group, Hosts, Fun),
   [ erel_manager:group_join(Group, Host) || Host <- Hosts ],
   {next_state, group_join, State};
 group_join(group_joined, #state{ groups = [{Group, Hosts}|Groups], joined_groups = JoinedGroups } = State) ->
   ?INFO("All required hosts for group '~s' have joined the group topic", [Group]),
-  erel_manager_quorum:stop("erel.group." ++ Group, Hosts),
   gen_fsm:send_event(self(), run),
   {next_state, ready, State#state{ groups = Groups, joined_groups = [{Group, Hosts}|JoinedGroups] }}.
 
@@ -135,7 +133,6 @@ deployment(run, #state{ deployments = [{Release, [Group|Groups]}|Deployments],
   {next_state, deployment, State};
 deployment({releases, Listed, Hosts}, #state{ releases = Releases, deployments =
         [{RelName, [Group|Groups]}|_], joined_groups = JoinedGroups } = State) ->
-  erel_manager_quorum:stop("erel.group." ++ Group, Hosts),
   %% find out which hosts need the release
   {_, RelVer, _} = lists:keyfind(RelName, 1, Releases),
   RHosts = lists:map(fun({Host, _}) -> Host end, lists:filter(fun({_, Rels}) -> not lists:member({RelName, RelVer}, Rels) end, Listed)),
@@ -150,7 +147,6 @@ deployment({releases, Listed, Hosts}, #state{ releases = Releases, deployments =
   [ erel_manager:group_join(SubGroup, Host) || Host <- RHosts ],
   {next_state, deployment, State};
 deployment({deployment_group_joined, SubGroup, Hosts}, #state{ releases = Releases, deployments = [{Release, _}|_] } = State) ->
-  erel_manager_quorum:stop("erel.group." ++ SubGroup, Hosts),
   ?INFO("Deployment group '~s' has been joined by all required nodes", [SubGroup]),
   Self = self(),
   Fun = fun (_) -> gen_fsm:send_event(Self, {transfer_completed, SubGroup, Hosts}) end,
@@ -159,14 +155,12 @@ deployment({deployment_group_joined, SubGroup, Hosts}, #state{ releases = Releas
   length(Hosts) > 0 andalso erel_manager:group_transfer(Release, SubGroup, Path,[]),
   {next_state, deployment, State};
 deployment({transfer_completed, Group, Hosts}, #state{ deployments = [{Release, [_|Groups]}|_Deployments] } = State) ->
-  erel_manager_quorum:stop("erel.group." ++ Group, Hosts),
   ?INFO("Transfer to all hosts in group '~s' has been completed", [Group]),
   Self = self(),
   Fun = fun (_) -> gen_fsm:send_event(Self, {provisioning_completed, Group, Hosts}) end,
   erel_manager_quorum:start({provision_release, Release}, {provision_release, Release}, "erel.group." ++ Group, Hosts, Fun), 
   {next_state, deployment, State#state{}};
 deployment({provisioning_completed, Group, Hosts}, #state{} =State) ->
-  erel_manager_quorum:stop("erel.group." ++ Group, Hosts),
   ?INFO("Provisioning on all hosts in group '~s' has been completed", [Group]),
   Self = self(),
   Fun = fun(_) -> gen_fsm:send_event(Self, {deployment_group_emptied, Group, Hosts}) end,
@@ -174,7 +168,6 @@ deployment({provisioning_completed, Group, Hosts}, #state{} =State) ->
   [ erel_manager:group_part(Group, Host) || Host <- Hosts ],
   {next_state, deployment, State};
 deployment({deployment_group_emptied, Group, Hosts}, #state{ deployments = [{Release, [_|Groups]}|Deployments]} =State) ->
-  erel_manager_quorum:stop("erel.group." ++ Group, Hosts),
   ?INFO("Deployment group '~s' has been emptied",[Group]),
   gen_fsm:send_event(self(), run),
   {next_state, deployment, State#state{ deployments = [{Release, Groups}|Deployments] }}.
