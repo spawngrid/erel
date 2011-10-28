@@ -79,7 +79,9 @@ handle_call({provision, Release, Path}, From, #state{ erels = Erels } = State) -
   {ok, [Releases]} = file:consult(filename:join([Dir, "releases", "RELEASES"])),
   Rel = {release, "erel", Version, _Erts, _Deps, permanent} = lists:keyfind("erel", 2, Releases),
 
-  Erl = filename:join([Dir, "bin", "erl"]),
+  Erl = filename:join([Dir, "erts-" ++ erel_release:erts_version(Dir), "bin",
+          "erl"]),
+
   Boot = filename:join([Dir, "releases", Version, "erel"]),
   NodeName = binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ erel_net_manager:hostname(),
   Cookie = erel_net_manager:cookie(list_to_atom(NodeName)),

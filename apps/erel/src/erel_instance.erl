@@ -89,7 +89,8 @@ handle_call(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_cast(start, #state{ root = Root, name = Name, version = Version } = State) ->
-  Erl = filename:join([Root, "bin", "erl"]),
+  Erl = filename:join([Root, "erts-" ++ erel_release:erts_version(Root), "bin",
+          "erl"]),
   Release = filename:join([Root, "releases", Version, Name]),
   NodeName = binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ erel_net_manager:hostname(),
   Cookie = erel_net_manager:cookie(list_to_atom(NodeName)),
