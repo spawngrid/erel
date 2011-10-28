@@ -24,7 +24,7 @@ binding({_Req, _Reply, Topic, _Expected, _Fun}) ->
 
 init(Endpoint, {Req, Reply, Topic, Expected, Fun}) ->
   length(Expected) == 0 andalso spawn(fun () -> stop(Req, Reply, Topic, Expected),
-                Fun(undefined) end),
+              Fun([], undefined) end),
   Req =/= none andalso erel_endp:cast(Endpoint, erel, Topic, Req),
   {ok, #state{ endpoint = Endpoint, expected = Expected, cb = Fun, reply =
           Reply, req = Req, topic = Topic }}.
@@ -43,7 +43,7 @@ handle_message({Reply, Payload, Hostname}, #state{ expected = Expected, cb =
   case Expected -- Hosts1 of 
     [] ->
       ?DBG("Quorum has been reached"), 
-      spawn(fun () -> stop(Req, Reply, Topic, Hosts1), Cb([{Hostname, Payload}|Payloads]) end),
+      spawn(fun () -> stop(Req, Reply, Topic, Hosts1), Cb(Hosts1, [{Hostname, Payload}|Payloads]) end),
       {ok, State#state{ hosts = Hosts1, cb = fun() -> ok end }};
     _ ->
       {ok, State#state{ hosts = Hosts1, payloads = [{Hostname, Payload}|Payloads] }}

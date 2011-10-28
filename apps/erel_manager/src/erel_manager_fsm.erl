@@ -102,21 +102,23 @@ ready(run, #state{ deployments = [{Rel, Groups}|_] } = State) -> % schedule a de
 
 group_join(run, #state{ groups = [{Group, Hosts}|_] } = State) -> % join host to a group
   Self = self(),
-  Fun = fun (_) -> gen_fsm:send_event(Self, group_quorum_reached) end,
+  Fun = fun (ActualHosts, _) ->
+          gen_fsm:send_event(Self, {group_quorum_reached, ActualHosts}) 
+        end,
   ?INFO("Waiting for hosts ~p to join the group '~s'",[Hosts, Group]),
   erel_manager_quorum:start("erel.host", Hosts, Fun),
   {next_state, group_join, State};
-group_join(group_quorum_reached, #state{ groups = [{Group, Hosts}|_] } = State) ->
+group_join({group_quorum_reached, ActualHosts}, #state{ groups = [{Group, Hosts}|Groups] } = State) ->
   Self = self(),
-  Fun = fun (_) -> gen_fsm:send_event(Self, group_joined) end,
+  Fun = fun (JoinedHosts, _) -> gen_fsm:send_event(Self, {group_joined, JoinedHosts}) end,
   ?INFO("Quorum for group '~s' has been reached", [Group]),
-  erel_manager_quorum:start("erel.group." ++ Group, Hosts, Fun),
-  [ erel_manager:group_join(Group, Host) || Host <- Hosts ],
-  {next_state, group_join, State};
-group_join(group_joined, #state{ groups = [{Group, Hosts}|Groups], joined_groups = JoinedGroups } = State) ->
+  erel_manager_quorum:start("erel.group." ++ Group, ActualHosts, Fun),
+  [ erel_manager:group_join(Group, Host) || Host <- ActualHosts ],
+  {next_state, group_join, State#state{ groups = [{Group, ActualHosts}|Groups] }};
+group_join({group_joined, JoinedHosts}, #state{ groups = [{Group, Hosts}|Groups], joined_groups = JoinedGroups } = State) ->
   ?INFO("All required hosts for group '~s' have joined the group topic", [Group]),
   gen_fsm:send_event(self(), run),
-  {next_state, ready, State#state{ groups = Groups, joined_groups = [{Group, Hosts}|JoinedGroups] }}.
+  {next_state, ready, State#state{ groups = Groups, joined_groups = [{Group, JoinedHosts}|JoinedGroups] }}.
 
 deployment(run, #state{ deployments = [{Release, []}|Deployments] } = State) -> % deployment is complete
   ?INFO("Release '~s' deployment has been completed",[Release]),
@@ -126,10 +128,9 @@ deployment(run, #state{ deployments = [{Release, [Group|Groups]}|Deployments],
                         joined_groups = JoinedGroups } = State) -> % check releases 
   Self = self(),
   Hosts = proplists:get_value(Group, JoinedGroups),
-  Fun = fun (Releases) -> gen_fsm:send_event(Self, {releases, Releases, Hosts}) end,
+  Fun = fun (Hosts1, Releases) -> gen_fsm:send_event(Self, {releases, Releases, Hosts1}) end,
   ?DBG("Requesting lists of releases from the hosts ~p in group '~s'",[Hosts,Group]),
-  erel_manager_quorum:start(list_releases, list_releases, "erel.group." ++
-      Group, Hosts,  Fun),
+  erel_manager_quorum:start(list_releases, list_releases, "erel.group." ++ Group, Hosts,  Fun),
   {next_state, deployment, State};
 deployment({releases, Listed, Hosts}, #state{ releases = Releases, deployments =
         [{RelName, [Group|Groups]}|_], joined_groups = JoinedGroups } = State) ->
@@ -141,15 +142,15 @@ deployment({releases, Listed, Hosts}, #state{ releases = Releases, deployments =
   length(RHosts) == 0 andalso ?INFO("No hosts need any new deployments"),
   length(RHosts) == 0 orelse ?INFO("Inviting ~p to the deployment group '~s'",
       [RHosts, SubGroup]),
-  Fun = fun (_) -> gen_fsm:send_event(Self, {deployment_group_joined, SubGroup,
-                  RHosts}) end,
+  Fun = fun (RHosts1,_) -> gen_fsm:send_event(Self, {deployment_group_joined, SubGroup,
+                  RHosts1}) end,
   erel_manager_quorum:start("erel.group." ++ SubGroup, RHosts, Fun),
   [ erel_manager:group_join(SubGroup, Host) || Host <- RHosts ],
   {next_state, deployment, State};
 deployment({deployment_group_joined, SubGroup, Hosts}, #state{ releases = Releases, deployments = [{Release, _}|_] } = State) ->
   ?INFO("Deployment group '~s' has been joined by all required nodes", [SubGroup]),
   Self = self(),
-  Fun = fun (_) -> gen_fsm:send_event(Self, {transfer_completed, SubGroup, Hosts}) end,
+  Fun = fun (Hosts1, _) -> gen_fsm:send_event(Self, {transfer_completed, SubGroup, Hosts1}) end,
   erel_manager_quorum:start(none, {received, Release}, "erel.group." ++ SubGroup, Hosts, Fun),
   {_, _, Path} = lists:keyfind(Release, 1, Releases),
   length(Hosts) > 0 andalso erel_manager:group_transfer(Release, SubGroup, Path,[]),
@@ -157,13 +158,13 @@ deployment({deployment_group_joined, SubGroup, Hosts}, #state{ releases = Releas
 deployment({transfer_completed, Group, Hosts}, #state{ deployments = [{Release, [_|Groups]}|_Deployments] } = State) ->
   ?INFO("Transfer to all hosts in group '~s' has been completed", [Group]),
   Self = self(),
-  Fun = fun (_) -> gen_fsm:send_event(Self, {provisioning_completed, Group, Hosts}) end,
+  Fun = fun (Hosts1, _) -> gen_fsm:send_event(Self, {provisioning_completed, Group, Hosts1}) end,
   erel_manager_quorum:start({provision_release, Release}, {provision_release, Release}, "erel.group." ++ Group, Hosts, Fun), 
   {next_state, deployment, State#state{}};
 deployment({provisioning_completed, Group, Hosts}, #state{} =State) ->
   ?INFO("Provisioning on all hosts in group '~s' has been completed", [Group]),
   Self = self(),
-  Fun = fun(_) -> gen_fsm:send_event(Self, {deployment_group_emptied, Group, Hosts}) end,
+  Fun = fun(Hosts1, _) -> gen_fsm:send_event(Self, {deployment_group_emptied, Group, Hosts1}) end,
   erel_manager_quorum:start(none, leave, "erel.group." ++ Group, Hosts, Fun), 
   [ erel_manager:group_part(Group, Host) || Host <- Hosts ],
   {next_state, deployment, State};
