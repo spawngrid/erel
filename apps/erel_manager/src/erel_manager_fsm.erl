@@ -127,21 +127,27 @@ deployment(run, #state{ deployments = [{Release, []}|Deployments] } = State) -> 
 deployment(run, #state{ deployments = [{Release, [Group|Groups]}|Deployments], 
                         joined_groups = JoinedGroups } = State) -> % check releases 
   Self = self(),
-  Fun = fun (Releases) -> gen_fsm:send_event(Self, {releases, Releases}) end,
-  ?DBG("Requesting lists of releases from the nodes in group '~s'",[Group]),
-  erel_manager_quorum:start(list_releases, list_releases, "erel.group." ++ Group, proplists:get_value(Group, JoinedGroups), Fun),
+  Hosts = proplists:get_value(Group, JoinedGroups),
+  Fun = fun (Releases) -> gen_fsm:send_event(Self, {releases, Releases, Hosts}) end,
+  ?DBG("Requesting lists of releases from the hosts ~p in group '~s'",[Hosts,Group]),
+  erel_manager_quorum:start(list_releases, list_releases, "erel.group." ++
+      Group, Hosts,  Fun),
   {next_state, deployment, State};
-deployment({releases, Listed}, #state{ releases = Releases, deployments = [{RelName, [Group|Groups]}|_] } = State) ->
+deployment({releases, Listed, Hosts}, #state{ releases = Releases, deployments =
+        [{RelName, [Group|Groups]}|_], joined_groups = JoinedGroups } = State) ->
+  erel_manager_quorum:stop("erel.group." ++ Group, Hosts),
   %% find out which hosts need the release
   {_, RelVer, _} = lists:keyfind(RelName, 1, Releases),
-  Hosts = lists:map(fun({Host, _}) -> Host end, lists:filter(fun({_, Rels}) -> not lists:member({RelName, RelVer}, Rels) end, Listed)),
+  RHosts = lists:map(fun({Host, _}) -> Host end, lists:filter(fun({_, Rels}) -> not lists:member({RelName, RelVer}, Rels) end, Listed)),
   Self = self(),
   SubGroup = Group ++ "." ++ RelName ++ "-" ++ RelVer,
-  length(Hosts) == 0 andalso ?INFO("No hosts need any new deployments"),
-  length(Hosts) == 0 orelse ?INFO("Inviting ~p to the deployment group '~s'", [Hosts, SubGroup]),
-  Fun = fun (_) -> gen_fsm:send_event(Self, {deployment_group_joined, SubGroup, Hosts}) end,
-  erel_manager_quorum:start("erel.group." ++ SubGroup, Hosts, Fun),
-  [ erel_manager:group_join(SubGroup, Host) || Host <- Hosts ],
+  length(RHosts) == 0 andalso ?INFO("No hosts need any new deployments"),
+  length(RHosts) == 0 orelse ?INFO("Inviting ~p to the deployment group '~s'",
+      [RHosts, SubGroup]),
+  Fun = fun (_) -> gen_fsm:send_event(Self, {deployment_group_joined, SubGroup,
+                  RHosts}) end,
+  erel_manager_quorum:start("erel.group." ++ SubGroup, RHosts, Fun),
+  [ erel_manager:group_join(SubGroup, Host) || Host <- RHosts ],
   {next_state, deployment, State};
 deployment({deployment_group_joined, SubGroup, Hosts}, #state{ releases = Releases, deployments = [{Release, _}|_] } = State) ->
   erel_manager_quorum:stop("erel.group." ++ SubGroup, Hosts),
