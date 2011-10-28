@@ -33,7 +33,7 @@ start_link() ->
         gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 provision(Release, Path) ->
-  gen_server:call(?SERVER, {provision, Release, Path}).
+  gen_server:call(?SERVER, {provision, Release, Path}, infinity).
 
 releases() ->
   gen_server:call(?SERVER, releases).
