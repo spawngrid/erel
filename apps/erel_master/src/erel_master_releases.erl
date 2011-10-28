@@ -79,8 +79,8 @@ handle_call({provision, Release, Path}, From, #state{ erels = Erels } = State) -
   {ok, [Releases]} = file:consult(filename:join([Dir, "releases", "RELEASES"])),
   Rel = {release, "erel", Version, _Erts, _Deps, permanent} = lists:keyfind("erel", 2, Releases),
 
-  Erl = filename:join([Dir, "erts-" ++ erel_release:erts_version(Dir), "bin",
-          "erl"]),
+  BinDir = filename:join([Dir, "erts-" ++ erel_release:erts_version(Dir), "bin"]), 
+  Erl = filename:join([BinDir, "erlexec"]),
 
   Boot = filename:join([Dir, "releases", Version, "erel"]),
   NodeName = binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ erel_net_manager:hostname(),
@@ -88,7 +88,9 @@ handle_call({provision, Release, Path}, From, #state{ erels = Erels } = State) -
   Cookie = erel_net_manager:cookie(NodeAtom),
   erlang:set_cookie(NodeAtom, Cookie),
   net_kernel:monitor_nodes(true),
-  Port = open_port({spawn_executable, Erl},[{args, ["-detached","-boot", Boot,
+  Port = open_port({spawn_executable, Erl},[
+          {env, [{"ROOTDIR",Dir}, {"BINDIR", BinDir}, {"EMU","beam"}]},
+          {args, ["-detached","-boot", Boot,
           "-name", NodeName, "-eval", "erlang:set_cookie('" ++
           atom_to_list(node()) ++ "','" ++ atom_to_list(Cookie) ++ "'),"
           "pong=net_adm:ping('" ++ atom_to_list(node()) ++"')."]}]),
