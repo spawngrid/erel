@@ -120,13 +120,15 @@ group_join(group_joined, #state{ groups = [{Group, Hosts}|Groups], joined_groups
   gen_fsm:send_event(self(), run),
   {next_state, ready, State#state{ groups = Groups, joined_groups = [{Group, Hosts}|JoinedGroups] }}.
 
-deployment(run, #state{ deployments = [{_Release, []}|Deployments] } = State) -> % deployment is complete
+deployment(run, #state{ deployments = [{Release, []}|Deployments] } = State) -> % deployment is complete
+  ?INFO("Release '~s' deployment has been completed",[Release]),
   gen_fsm:send_event(self(), run),
   {next_state, ready, State#state{ deployments = Deployments }};
 deployment(run, #state{ deployments = [{Release, [Group|Groups]}|Deployments], 
                         joined_groups = JoinedGroups } = State) -> % check releases 
   Self = self(),
   Fun = fun (Releases) -> gen_fsm:send_event(Self, {releases, Releases}) end,
+  ?DBG("Requesting lists of releases from the nodes in group '~s'",[Group]),
   erel_manager_quorum:start(list_releases, list_releases, "erel.group." ++ Group, proplists:get_value(Group, JoinedGroups), Fun),
   {next_state, deployment, State};
 deployment({releases, Listed}, #state{ releases = Releases, deployments = [{RelName, [Group|Groups]}|_] } = State) ->
