@@ -60,7 +60,10 @@ handle_message({chunk, Id, Crc, Chunk, Chunks, ChunkSize, Part}=Msg, #state{} = 
   {ok, State};
 
 handle_message(list_releases, #state{ endpoint = Endpoint, topic = Topic, hostname = Hostname } = State) ->
-  erel_endp:cast(Endpoint, erel, Topic, {list_releases, erel_master_releases:releases(), Hostname}),
+  ?INFO("Release listing request has been received"),
+  Releases = erel_master_releases:releases(),
+  ?DBG("Available releases: ~p",[Releases]),
+  erel_endp:cast(Endpoint, erel, Topic, {list_releases, Releases, Hostname}),
   {ok, State};
 
 handle_message({provision_release, Release}, #state{ endpoint = Endpoint, topic = Topic, hostname = Hostname, received = Received } = State) ->
