@@ -95,7 +95,8 @@ ready(run, #state{ groups = [_|_] } = State) -> % schedule joining a group
   {next_state, group_join, State};
 ready(run, #state{ deployments = [] } = State) -> % all deployments have been done
   {stop, normal, State};
-ready(run, #state{ deployments = [_|_] } = State) -> % schedule a deployment
+ready(run, #state{ deployments = [{Rel, Groups}|_] } = State) -> % schedule a deployment
+  ?INFO("Scheduling deployment of '~s' to ~p groups", [Rel, Groups]),
   gen_fsm:send_event(self(), run),
   {next_state, deployment, State}.
 
@@ -274,7 +275,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 
 sort_config(Terms) ->
   lists:usort(fun(C1,C2) when is_tuple(C1), is_tuple(C2) ->
-                directive_priority(element(1, C1)) =< directive_priority(element(1,C2))
+                directive_priority(element(1, C1)) < directive_priority(element(1,C2))
             end, Terms).
 % where
   directive_priority(release) -> 2;
