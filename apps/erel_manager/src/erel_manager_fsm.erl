@@ -12,6 +12,7 @@
     ready/2,
     group_join/2,
     deployment/2,
+    startup/2,
     handle_event/3,
     handle_sync_event/4,
     handle_info/3,
@@ -102,7 +103,15 @@ ready(run, #state{ deployments = [], type = provision } = State) -> % all deploy
 ready(run, #state{ deployments = [{Rel, Groups}|_], type = provision } = State) -> % schedule a deployment
   ?INFO("Scheduling deployment of '~s' to ~p groups", [Rel, Groups]),
   gen_fsm:send_event(self(), run),
-  {next_state, deployment, State}.
+  {next_state, deployment, State};
+ready(run, #state{ deployments = [], type = start } = State) -> % all startups have been done
+  ?INFO("No more startups pending"),
+  {stop, normal, State};
+ready(run, #state{ deployments = [{Rel, Groups}|_], type = start } = State) -> % schedule a startup 
+  ?INFO("Scheduling a startup of '~s' to ~p groups", [Rel, Groups]),
+  gen_fsm:send_event(self(), run),
+  {next_state, startup, State}.
+
 
 group_join(run, #state{ groups = [{Group, Hosts}|_] } = State) -> % join host to a group
   Self = self(),
@@ -123,6 +132,52 @@ group_join({group_joined, JoinedHosts}, #state{ groups = [{Group, Hosts}|Groups]
   ?INFO("All required hosts for group '~s' have joined the group topic", [Group]),
   gen_fsm:send_event(self(), run),
   {next_state, ready, State#state{ groups = Groups, joined_groups = [{Group, JoinedHosts}|JoinedGroups] }}.
+
+startup(run, #state{ deployments = [{Release, []}|Deployments] } = State) -> % startup is complete
+  ?INFO("Release '~s' startup has been completed",[Release]),
+  gen_fsm:send_event(self(), run),
+  {next_state, ready, State#state{ deployments = Deployments }};
+startup(run, #state{ deployments = [{Release, [Group|Groups]}|Deployments], 
+                        joined_groups = JoinedGroups } = State) -> % check statuses
+  Self = self(),
+  Hosts = proplists:get_value(Group, JoinedGroups),
+  Fun = fun (Hosts1, Releases) -> gen_fsm:send_event(Self, {releases, Releases, Hosts1}) end,
+  ?DBG("Requesting release statuses from the hosts ~p in group '~s'",[Hosts,Group]),
+  erel_manager_quorum:start(status_releases,status_releases, "erel.group." ++ Group, Hosts,  Fun),
+  {next_state, startup, State};
+startup({releases, Listed, Hosts}, #state{ releases = Releases, deployments =
+        [{RelName, [Group|Groups]}|_], joined_groups = JoinedGroups } = State) ->
+  %% find out which hosts need the release
+  {_, RelVer, _} = lists:keyfind(RelName, 1, Releases),
+  RHosts = lists:map(fun({Host, _}) -> Host end, lists:filter(fun({_, Rels}) -> not lists:member({RelName, RelVer}, Rels) end, Listed)),
+  Self = self(),
+  SubGroup = Group ++ ".start-" ++ RelName ++ "-" ++ RelVer,
+  length(RHosts) == 0 andalso ?INFO("No hosts need any new startups"),
+  length(RHosts) == 0 orelse ?INFO("Inviting ~p to the startup group '~s'",
+      [RHosts, SubGroup]),
+  Fun = fun (RHosts1,_) -> gen_fsm:send_event(Self, {startup_group_joined, SubGroup,
+                  RHosts1}) end,
+  erel_manager_quorum:start("erel.group." ++ SubGroup, RHosts, Fun),
+  [ erel_manager:group_join(SubGroup, Host) || Host <- RHosts ],
+  {next_state, startup, State};
+startup({startup_group_joined, SubGroup, Hosts}, #state{ releases = Releases, deployments = [{Release, _}|_] } = State) ->
+  ?INFO("Startup group '~s' has been joined by all required nodes", [SubGroup]),
+  Self = self(),
+  Fun = fun (Hosts1, _) -> gen_fsm:send_event(Self, {started, SubGroup, Hosts1}) end,
+  erel_manager_quorum:start({start, Release}, {started, Release}, "erel.group." ++ SubGroup, Hosts, Fun),
+  {next_state, startup, State};
+startup({started, Group, Hosts}, #state{ deployments = [{Release, [_|Groups]}|_Deployments] } = State) ->
+  ?INFO("Startup on all hosts in group '~s' has been completed", [Group]),
+  Self = self(),
+  Fun = fun(Hosts1, _) -> gen_fsm:send_event(Self, {startup_group_emptied, Group, Hosts1}) end,
+  erel_manager_quorum:start(none, leave, "erel.group." ++ Group, Hosts, Fun), 
+  [ erel_manager:group_part(Group, Host) || Host <- Hosts ],
+  {next_state, startup, State};
+startup({startup_group_emptied, Group, Hosts}, #state{ deployments = [{Release, [_|Groups]}|Deployments]} =State) ->
+  ?INFO("Startup group '~s' has been emptied",[Group]),
+  gen_fsm:send_event(self(), run),
+  {next_state, startup, State#state{ deployments = [{Release, Groups}|Deployments] }}.
+
 
 deployment(run, #state{ deployments = [{Release, []}|Deployments] } = State) -> % deployment is complete
   ?INFO("Release '~s' deployment has been completed",[Release]),

@@ -1,10 +1,10 @@
 -module(erel_master_releases).
 
 -behaviour(gen_server).
-
+-include_lib("erel_master/include/erel_master.hrl").
 %% API
 -export([start_link/0]).
--export([provision/2, releases/0]).
+-export([provision/2, releases/0, start/1]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -16,7 +16,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, { releases = [] :: list({string(), term()})}).
+-record(state, { nodes = [] :: list({string(), atom()}), releases = [] :: list({string(), term()})}).
 
 %%%===================================================================
 %%% API
@@ -37,6 +37,9 @@ provision(Release, Path) ->
 
 releases() ->
   gen_server:call(?SERVER, releases).
+
+start(Release) ->
+  gen_server:call(?SERVER, {start, Release}).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -81,7 +84,34 @@ handle_call({provision, Release, Path}, From, #state{ releases = Releases } = St
   {reply, ok, State#state{ releases = [{Release, Version}|Releases] }};
 
 handle_call(releases, _From, #state{ releases = Releases } = State) ->
-  {reply, Releases, State}.
+  {reply, Releases, State};
+
+handle_call({start, Release}, _From, #state{ releases = Releases, nodes = Nodes } = State) ->
+  Version = proplists:get_value(Release, Releases),
+  Dir = filename:join([erel_master:directory(), "releases", Release]),
+  BinDir = filename:join([Dir, "erts-" ++ erel_release:erts_version(Dir), "bin"]), 
+  Erl = filename:join([BinDir, "erlexec"]),
+
+  Boot = filename:join([Dir, "releases", Version, Release]),
+  NodeName = binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ erel_net_manager:hostname(),
+  NodeAtom = list_to_atom(NodeName),
+  Cookie = erel_net_manager:cookie(NodeAtom),
+  erlang:set_cookie(NodeAtom, Cookie),
+  net_kernel:monitor_nodes(true),
+  Port = open_port({spawn_executable, Erl},[
+          {env, [{"ROOTDIR",Dir}, {"BINDIR", BinDir}, {"EMU","beam"}]},
+          {args, ["-detached","-boot", Boot,
+          "-name", NodeName, "-eval", "erlang:set_cookie('" ++
+          atom_to_list(node()) ++ "','" ++ atom_to_list(Cookie) ++ "'),"
+          "pong=net_adm:ping('" ++ atom_to_list(node()) ++"')."]}]),
+  port_connect(Port, whereis(application_controller)),
+  unlink(Port),
+  receive 
+     {nodeup, NodeAtom} -> net_kernel:monitor_nodes(false),
+       {reply, ok, State#state{ nodes = [{Release, NodeAtom}|Nodes] }}
+  after 1000*60 ->
+       {reply, {error, timeout}, State}
+  end.
 
 %%--------------------------------------------------------------------
 %% @private

@@ -1,10 +1,13 @@
 -module(erel_manager_main).
--export([provision/0]).
+-export([provision/0, start/0]).
 
 -include_lib("erel_manager/include/erel_manager.hrl").
 
 provision() ->
   start(provision).
+
+start() ->
+  start(start).
 
 start(Type) ->
   case application:get_env(erel_manager, config) of
