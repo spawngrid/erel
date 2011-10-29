@@ -39,7 +39,7 @@ releases() ->
   gen_server:call(?SERVER, releases).
 
 start(Release) ->
-  gen_server:call(?SERVER, {start, Release}).
+  gen_server:call(?SERVER, {start, Release}, infinity).
 
 %%%===================================================================
 %%% gen_server callbacks
