@@ -4,7 +4,7 @@
 -behaviour(gen_fsm).
 
 %% API
--export([start_link/1]).
+-export([start_link/2]).
 
 %% gen_fsm callbacks
 -export([init/1,
@@ -24,7 +24,9 @@
 -type release_version() :: string().
 -type release() :: {release_name(), release_version()}.
 
--record(state, { config :: list(term()), 
+-record(state, { 
+    type :: provision,
+    config :: list(term()), 
     groups = [] :: list({string(), list(string())}),
     joined_groups = [] :: list({string(), list(string())}),
     releases = [] :: list({release(), string()}),
@@ -43,8 +45,8 @@
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(Config) ->
-  gen_fsm:start_link({local, ?SERVER}, ?MODULE, Config, []).
+start_link(Type, Config) ->
+  gen_fsm:start_link({local, ?SERVER}, ?MODULE, {Type, Config}, []).
 
 %%%===================================================================
 %%% gen_fsm callbacks
@@ -63,9 +65,9 @@ start_link(Config) ->
 %%                     {stop, StopReason}
 %% @end
 %%--------------------------------------------------------------------
-init(Config) ->
+init({Type, Config}) ->
   gen_fsm:send_event(self(), run),
-  {ok, started, #state{ config = sort_config(Config) }}.
+  {ok, started, #state{ type = Type, config = sort_config(Config) }}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -91,11 +93,13 @@ started(run, #state{ config = [Instruction|Config] } = State) ->
   {next_state, started, State1#state{ config = Config }}.
 
 ready(run, #state{ groups = [_|_] } = State) -> % schedule joining a group
+  ?DBG("Preparing groups"),
   gen_fsm:send_event(self(), run),
   {next_state, group_join, State};
-ready(run, #state{ deployments = [] } = State) -> % all deployments have been done
+ready(run, #state{ deployments = [], type = provision } = State) -> % all deployments have been done
+  ?INFO("No more deployments pending"),
   {stop, normal, State};
-ready(run, #state{ deployments = [{Rel, Groups}|_] } = State) -> % schedule a deployment
+ready(run, #state{ deployments = [{Rel, Groups}|_], type = provision } = State) -> % schedule a deployment
   ?INFO("Scheduling deployment of '~s' to ~p groups", [Rel, Groups]),
   gen_fsm:send_event(self(), run),
   {next_state, deployment, State}.
