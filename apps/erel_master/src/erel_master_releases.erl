@@ -16,7 +16,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, { erels = [] :: list({string(), atom()})}).
+-record(state, { releases = [] :: list({string(), term()})}).
 
 %%%===================================================================
 %%% API
@@ -70,42 +70,18 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({provision, Release, Path}, From, #state{ erels = Erels } = State) ->
+handle_call({provision, Release, Path}, From, #state{ releases = Releases } = State) ->
   Dir = filename:join([erel_master:directory(), "releases", Release]),
   filelib:ensure_dir(Dir ++ "/"),
   ok = erl_tar:extract(Path, [{cwd, Dir}]),
   file:delete(Path),
-  %% start erel
-  {ok, [Releases]} = file:consult(filename:join([Dir, "releases", "RELEASES"])),
-  Rel = {release, "erel", Version, _Erts, _Deps, permanent} = lists:keyfind("erel", 2, Releases),
+  %% extract version
+  {ok, [Rels]} = file:consult(filename:join([Dir, "releases", "RELEASES"])),
+  {release, Release, Version, _, _, _} = lists:keyfind(Release, 2, Rels),
+  {reply, ok, State#state{ releases = [{Release, Version}|Releases] }};
 
-  BinDir = filename:join([Dir, "erts-" ++ erel_release:erts_version(Dir), "bin"]), 
-  Erl = filename:join([BinDir, "erlexec"]),
-
-  Boot = filename:join([Dir, "releases", Version, "erel"]),
-  NodeName = binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ erel_net_manager:hostname(),
-  NodeAtom = list_to_atom(NodeName),
-  Cookie = erel_net_manager:cookie(NodeAtom),
-  erlang:set_cookie(NodeAtom, Cookie),
-  net_kernel:monitor_nodes(true),
-  Port = open_port({spawn_executable, Erl},[
-          {env, [{"ROOTDIR",Dir}, {"BINDIR", BinDir}, {"EMU","beam"}]},
-          {args, ["-detached","-boot", Boot,
-          "-name", NodeName, "-eval", "erlang:set_cookie('" ++
-          atom_to_list(node()) ++ "','" ++ atom_to_list(Cookie) ++ "'),"
-          "pong=net_adm:ping('" ++ atom_to_list(node()) ++"')."]}]),
-  port_connect(Port, whereis(application_controller)),
-  unlink(Port),
-  receive 
-     {nodeup, NodeAtom} -> net_kernel:monitor_nodes(false),
-       {reply, ok, State#state{ erels = [{Release, NodeAtom}|Erels] }}
-  after 1000*60 ->
-       {reply, {error, timeout}, State}
-  end;
-
-handle_call(releases, _From, #state{ erels = Erels } = State) ->
-  Reply = lists:flatten([ gen_server:call({erel_release_manager, Node}, releases) || {_, Node} <- Erels ]),
-  {reply, Reply, State}.
+handle_call(releases, _From, #state{ releases = Releases } = State) ->
+  {reply, Releases, State}.
 
 %%--------------------------------------------------------------------
 %% @private
