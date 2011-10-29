@@ -82,7 +82,7 @@ terminate(Reason, _State) ->
 %%
 binding_to_declare(#endp_binding{ name = Name, type = Type, topic = Topic}) ->
   {#'exchange.declare'{exchange = atom_to_binary(Name, latin1),  type =
-      binding_type_to_type(Type) },<<>>,list_to_binary(Topic)}.
+      binding_type_to_type(Type), auto_delete = true }, #'queue.declare'{ queue = <<>>, auto_delete = true, exclusive = true}, list_to_binary(Topic)}.
 binding_type_to_type(topic) ->
   <<"topic">>;
 binding_type_to_type(direct) ->
