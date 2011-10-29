@@ -1,9 +1,9 @@
 -module(erel_manager_main).
--export([start/0]).
+-export([provision/0]).
 
 -include_lib("erel_manager/include/erel_manager.hrl").
 
-start() ->
+provision() ->
   case application:get_env(erel_manager, config) of
     {ok, ConfigFile} ->
       {ok, Config} = file:consult(ConfigFile),
