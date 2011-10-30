@@ -113,6 +113,7 @@ handle_call({start, Release}, _From, #state{ releases = Releases, nodes = Nodes 
   erlang:set_cookie(NodeAtom, Cookie),
   net_kernel:monitor_nodes(true),
   Port = open_port({spawn_executable, Erl},[
+          {cd, Dir},
           {env, [{"ROOTDIR",Dir}, {"BINDIR", BinDir}, {"EMU","beam"}]},
           {args, ["-detached","-boot", Boot,
           "-name", NodeName, "-eval", "erlang:set_cookie('" ++
