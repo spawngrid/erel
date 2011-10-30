@@ -87,11 +87,25 @@ handle_call(releases, _From, #state{ releases = Releases } = State) ->
   {reply, Releases, State};
 
 handle_call({start, Release}, _From, #state{ releases = Releases, nodes = Nodes } = State) ->
+  %% Release
   Version = proplists:get_value(Release, Releases),
   Dir = filename:join([erel_master:directory(), "releases", Release]),
+  %% erts
   BinDir = filename:join([Dir, "erts-" ++ erel_release:erts_version(Dir), "bin"]), 
   Erl = filename:join([BinDir, "erlexec"]),
-
+  %% sys.config
+  SysConfigF = filename:join([Dir,"releases",Version,"sys.config"]),
+  AppConfigF = filename:join([Dir,"etc","app.config"]),
+  Config =
+  case {filelib:is_regular(SysConfigF), filelib:is_regular(AppConfigF)} of
+    {true, _} ->
+      ["-config", SysConfigF];
+    {_, true} ->
+      ["-config", AppConfigF];
+    _ ->
+      []
+  end,
+  %% Boot
   Boot = filename:join([Dir, "releases", Version, Release]),
   NodeName = binary_to_list(ossp_uuid:make(v4, text)) ++ "@" ++ erel_net_manager:hostname(),
   NodeAtom = list_to_atom(NodeName),
@@ -103,7 +117,7 @@ handle_call({start, Release}, _From, #state{ releases = Releases, nodes = Nodes 
           {args, ["-detached","-boot", Boot,
           "-name", NodeName, "-eval", "erlang:set_cookie('" ++
           atom_to_list(node()) ++ "','" ++ atom_to_list(Cookie) ++ "'),"
-          "pong=net_adm:ping('" ++ atom_to_list(node()) ++"')."]}]),
+          "pong=net_adm:ping('" ++ atom_to_list(node()) ++"')."|Config]}]),
   port_connect(Port, whereis(application_controller)),
   unlink(Port),
   receive 
