@@ -51,9 +51,8 @@ transfer(From, Endpoint, Id, Group, Path, Attributes) ->
   gen_server:reply(From, ok).
 
 create_tar(Path) ->
-  Files = filelib:fold_files(Path, ".*", true, fun(File, Acc) -> [{string:strip(File -- Path, left, $/), File}|Acc] end, []),
   Tar = filename:join([filename:dirname(Path),filename:basename(Path) ++ ".tar"]),
-  ok = erl_tar:create(Tar, Files),
+  ok = erl_tar:create(Tar, [{".", Path}]),
   {ok, Binary} = file:read_file(Tar),
   file:delete(Tar),
   {ok, Binary}.
