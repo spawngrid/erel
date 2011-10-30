@@ -1,5 +1,11 @@
 #! /bin/sh
 
+realpath() {
+      [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"
+}
+
+
+CONFIG=`realpath $2`
 HERE=$(cd ${0%/*} && pwd)
 ROOTDIR=${HERE%/*}
 EMU=beam
@@ -11,4 +17,4 @@ export BINDIR
 
 tail=${@:3:$((${#@} - 1))}
 
-exec $BINDIR/erlexec -mode embedded -config $ROOTDIR/releases/{{rel_vsn}}/sys -boot $ROOTDIR/releases/{{rel_vsn}}/erel_manager -noshell -s erel_manager_main $1 -erel_manager config \"$2\" $tail
+exec $BINDIR/erlexec -mode embedded -config $ROOTDIR/releases/{{rel_vsn}}/sys -boot $ROOTDIR/releases/{{rel_vsn}}/erel_manager -noshell -s erel_manager_main $1 -erel_manager config \"$CONFIG\" $tail
