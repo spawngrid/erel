@@ -1,6 +1,9 @@
 all: release
 
-compile:
+deps: 
+	@rebar get-deps
+
+compile: deps
 	@rebar compile
 
 release: compile
