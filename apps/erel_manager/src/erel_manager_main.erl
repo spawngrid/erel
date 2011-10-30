@@ -10,6 +10,12 @@ start() ->
   start(start).
 
 start(Type) ->
+  case application:get_env(erel_manager, debug) of
+    {ok, true} ->
+      ignore;
+    undefined -> % switch debugging off
+      alog_control:replace_flows([{flow, nodebug, {mod, ['_']},{'<', debug}, [alog_tty], true}])
+  end,
   case application:get_env(erel_manager, config) of
     {ok, ConfigFile} ->
       {ok, Config} = file:consult(ConfigFile),
